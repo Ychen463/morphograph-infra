@@ -1,0 +1,64 @@
+# Full MorphoGraph experiment: shared encoder + all heads.
+# Combines segmentation with morphological graph learning.
+
+experiment:
+  name: "MG1_full_morphograph"
+  description: "MorphoGraph-Net with all heads enabled"
+
+model:
+  backbone: "mit_b2"
+  pretrained: true
+  heads:
+    seg_head: true
+    endpoint_head: true
+    junction_head: true
+    edge_decoder: true
+    width_head: true
+    spalling_region_head: true
+    relation_head: true
+  num_classes: 3
+  # Graph construction parameters
+  graph:
+    # Minimum skeleton branch length to keep (pixels)
+    min_branch_length: 10
+    # Junction merge radius (pixels)
+    junction_merge_radius: 5
+
+data:
+  domains_config: "configs/data/domains.example.yaml"
+  protocol_config: "configs/protocols/lodo.example.yaml"
+  img_size: [512, 512]
+  augmentation: "medium"
+
+training:
+  optimizer: "adamw"
+  lr: 6.0e-5
+  weight_decay: 0.01
+  scheduler: "cosine"
+  warmup_epochs: 5
+  max_epochs: 150
+  batch_size: 8
+  num_workers: 4
+  loss:
+    ce_weight: 1.0
+    dice_weight: 1.0
+    endpoint_weight: 0.5
+    junction_weight: 0.5
+    edge_weight: 1.0
+    width_weight: 0.5
+    spalling_region_weight: 0.5
+    relation_weight: 0.5
+
+evaluation:
+  metrics:
+    - "mIoU"
+    - "BF1"
+    - "clDice"
+    - "graph_edit_distance"
+    - "endpoint_f1"
+    - "junction_f1"
+  per_domain: true
+
+seed: 42
+device: "cuda"
+wandb_project: "morphograph-infra"

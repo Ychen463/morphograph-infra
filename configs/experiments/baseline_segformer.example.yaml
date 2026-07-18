@@ -1,0 +1,56 @@
+# Baseline experiment: mask-only SegFormer-B2.
+# No graph heads, no morphological targets — pure semantic segmentation.
+
+experiment:
+  name: "B0_segformer_mask_only"
+  description: "SegFormer-B2 baseline with standard CE+Dice loss"
+
+model:
+  backbone: "mit_b2"
+  pretrained: true
+  # Heads to enable (mask-only baseline uses only seg_head)
+  heads:
+    seg_head: true
+    endpoint_head: false
+    junction_head: false
+    edge_decoder: false
+    width_head: false
+    spalling_region_head: false
+    relation_head: false
+  num_classes: 3  # background, crack, spalling
+
+data:
+  # Reference to domain config
+  domains_config: "configs/data/domains.example.yaml"
+  # Reference to split protocol
+  protocol_config: "configs/protocols/lodo.example.yaml"
+  img_size: [512, 512]
+  # Augmentation intensity
+  augmentation: "medium"
+
+training:
+  optimizer: "adamw"
+  lr: 6.0e-5
+  weight_decay: 0.01
+  scheduler: "cosine"
+  warmup_epochs: 5
+  max_epochs: 100
+  batch_size: 8
+  num_workers: 4
+  # Loss weights
+  loss:
+    ce_weight: 1.0
+    dice_weight: 1.0
+
+evaluation:
+  metrics:
+    - "mIoU"
+    - "BF1"
+    - "clDice"
+  # Per-domain breakdown
+  per_domain: true
+
+seed: 42
+device: "cuda"
+# WandB project (optional)
+wandb_project: "morphograph-infra"

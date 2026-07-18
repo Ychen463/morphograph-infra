@@ -1,0 +1,33 @@
+# Domain configuration for multi-site infrastructure datasets.
+# Each domain represents a distinct data source (site, sensor, or collection campaign).
+
+domains:
+  dam_site_a:
+    name: "Dam Site A"
+    image_dir: "dam_site_a/images"
+    mask_dir: "dam_site_a/masks"
+    original_classes:
+      0: background
+      1: crack
+      2: spalling
+    resolution_mm_per_px: 0.5
+    group_id: "site_a"
+
+  dam_site_b:
+    name: "Dam Site B"
+    image_dir: "dam_site_b/images"
+    mask_dir: "dam_site_b/masks"
+    original_classes:
+      0: background
+      1: crack
+      2: spalling
+      3: efflorescence
+    resolution_mm_per_px: 0.3
+    group_id: "site_b"
+
+# Canonical class mapping applied after per-domain remapping
+canonical_classes:
+  0: background
+  1: crack
+  2: spalling
+  255: ignore

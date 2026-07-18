@@ -1,0 +1,34 @@
+# Leave-One-Domain-Out (LODO) cross-validation protocol.
+# Each fold holds out one domain (or domain group) as the test set.
+# No test-domain data is used for training, validation, or hyperparameter tuning.
+
+protocol:
+  name: "lodo"
+  description: "Leave-One-Domain-Out grouped cross-validation"
+
+  # Split strategy
+  strategy: "leave_one_group_out"
+
+  # Validation fraction drawn from training domains only
+  val_fraction: 0.15
+
+  # Stratify validation split by class frequency
+  stratify_by: "class_frequency"
+
+  # Ensure no near-duplicate images leak across splits
+  dedup:
+    enabled: true
+    # Perceptual hash threshold (hamming distance)
+    phash_threshold: 8
+
+  # Random seed for reproducible splits
+  seed: 42
+
+  # Evaluation rules
+  evaluation:
+    # Never tune hyperparameters on the held-out domain
+    no_test_domain_tuning: true
+    # Report per-domain metrics + aggregated mean ± std
+    report_per_domain: true
+    # Minimum number of seeds per experiment for reporting
+    min_seeds: 3

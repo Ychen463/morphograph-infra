@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.eggs/
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Data (keep manifests, ignore raw and derived)
+data/raw/
+data/derived/
+
+# Experiment outputs
+runs/
+checkpoints/
+wandb/
+
+# Model weights
+*.pt
+*.pth
+*.ckpt
+
+# Environment
+.env
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
