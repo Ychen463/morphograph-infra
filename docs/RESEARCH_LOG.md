@@ -83,3 +83,33 @@ Experiment phases, results, and next steps. Each entry is immutable once written
 **Next Steps**: Run B1a (B0 + clDice topology loss).
 
 **Status**: completed
+
+---
+
+### P2-B1a: B0 + clDice Topology Loss — 2026-07-18
+
+**Objective**: Test whether soft clDice loss improves crack topology without explicit morphology supervision.
+
+**Setup**:
+- Architecture: identical to B0 (seg_head only, 27.1M params)
+- Loss: CE+Dice + clDice(crack class), weight=0.15, start_epoch=40, ramp=5 epochs
+- Soft skeletonization: 10 iterations, forced float32
+- All other hyperparameters identical to B0
+
+**Results**:
+| Metric | B0 | B1a | Delta |
+|--------|-----|-----|-------|
+| best val mIoU_fg | **0.673** | 0.657 | -0.016 |
+| final val loss | 0.357 | 0.365 | +0.008 |
+
+**Observations**:
+- clDice **hurts** mIoU_fg by 1.6 points — topology loss alone does not improve segmentation quality
+- Possible explanations:
+  - Crack occupies only 2.2% of pixels; soft skeletonization gradient signal is weak
+  - Late activation (epoch 40) means model already settled in a non-topology-optimal basin
+  - weight=0.15 may conflict with the CE+Dice gradient direction on thin structures
+- This is a **positive result for H2**: implicit topology loss is not sufficient; explicit graph supervision may be needed
+
+**Next Steps**: Run B2 (B0 + explicit skeleton head supervision). Direct comparison: implicit topology loss (B1a) vs explicit dense skeleton prediction (B2).
+
+**Status**: completed
