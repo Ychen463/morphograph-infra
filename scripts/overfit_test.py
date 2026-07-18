@@ -128,12 +128,16 @@ def discover_samples(data_root: Path, num_samples: int) -> list[tuple[Path, Path
         if not img_dir.exists():
             continue
         for img_path in sorted(img_dir.iterdir()):
-            # Try common mask name patterns
-            for ext in [".png", ".jpg", ".jpeg"]:
-                mask_path = mask_dir / (img_path.stem + ext)
-                if mask_path.exists():
-                    pairs.append((img_path, mask_path))
-                    break
+            # Try common mask name patterns: "E (1).jpg" -> "E (1)_mask.png"
+            for suffix in ["_mask", ""]:
+                for ext in [".png", ".jpg", ".jpeg"]:
+                    mask_path = mask_dir / (img_path.stem + suffix + ext)
+                    if mask_path.exists():
+                        pairs.append((img_path, mask_path))
+                        break
+                else:
+                    continue
+                break
             if len(pairs) >= num_samples:
                 break
         if len(pairs) >= num_samples:

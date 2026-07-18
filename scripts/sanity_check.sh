@@ -172,9 +172,11 @@ try:
         fig, axes = plt.subplots(2, 4, figsize=(16, 8))
         for i, img_path in enumerate(samples):
             img = np.array(Image.open(img_path))
-            mask_path = dam_easy_masks / img_path.name.replace(".jpg", ".png")
+            # Try "E (1)_mask.png" first, then "E (1).png"
+            mask_path = dam_easy_masks / (img_path.stem + "_mask.png")
             if not mask_path.exists():
-                # Try same extension
+                mask_path = dam_easy_masks / img_path.name.replace(".jpg", ".png")
+            if not mask_path.exists():
                 mask_path = dam_easy_masks / img_path.name
 
             axes[0, i].imshow(img)
