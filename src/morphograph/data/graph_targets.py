@@ -185,7 +185,7 @@ def _trace_branches(
                     break
 
                 # Find next unvisited skeleton neighbor
-                found_next = False
+                advanced = False
                 for dr2, dc2 in neighbors_offsets:
                     nr2, nc2 = cr + dr2, cc + dc2
                     if not (0 <= nr2 < h and 0 <= nc2 < w):
@@ -193,27 +193,32 @@ def _trace_branches(
                     # Never walk back to the starting keypoint
                     if (nr2, nc2) == (sr, sc):
                         continue
-                    if not skeleton[nr2, nc2] or visited[nr2, nc2]:
-                        # Allow reaching a keypoint even if "visited"
-                        if (nr2, nc2) in kp_map:
-                            path.append((nr2, nc2))
-                            end_idx = kp_map[(nr2, nc2)]
-                            branches.append((
-                                start_idx,
-                                end_idx,
-                                np.array(path, dtype=np.int64),
-                            ))
-                            found_next = True
-                            break
+                    if not skeleton[nr2, nc2]:
+                        continue
+                    # Reached another keypoint (may already be visited)
+                    if (nr2, nc2) in kp_map:
+                        path.append((nr2, nc2))
+                        end_idx = kp_map[(nr2, nc2)]
+                        branches.append((
+                            start_idx,
+                            end_idx,
+                            np.array(path, dtype=np.int64),
+                        ))
+                        advanced = False  # signal outer break
+                        break
+                    if visited[nr2, nc2]:
                         continue
                     visited[nr2, nc2] = True
                     path.append((nr2, nc2))
                     cr, cc = nr2, nc2
-                    found_next = True
+                    advanced = True
+                    break
+                else:
+                    # for-loop exhausted without break → dead end
                     break
 
-                if not found_next:
-                    break  # dead end (dangling spur without keypoint match)
+                if not advanced:
+                    break  # found a keypoint or dead end
 
     return branches
 
