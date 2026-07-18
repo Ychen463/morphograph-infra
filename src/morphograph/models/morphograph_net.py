@@ -333,10 +333,10 @@ class MorphoAuxNet(nn.Module):
             width: (B, 1, H, W) width values (non-negative).
         """
         input_size = x.shape[2:]  # (H, W)
-        # HuggingFace SegformerEncoder returns BaseModelOutput;
-        # hidden_states[1:] gives the 4 stage outputs.
+        # HuggingFace SegformerEncoder with output_hidden_states=True
+        # returns exactly 4 stage outputs: (64, 128, 320, 512) channels.
         enc_out = self.encoder(x, output_hidden_states=True, return_dict=True)
-        features = list(enc_out.hidden_states[1:])  # 4 stage feature maps
+        features = list(enc_out.hidden_states)  # 4 stage feature maps
 
         # Shared FPN features at full input resolution
         fpn_features = self.fpn(features, target_size=input_size)
