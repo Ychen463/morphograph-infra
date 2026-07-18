@@ -263,9 +263,12 @@ def main() -> None:
     seg_loss_fn = WeightedCEDiceLoss(
         class_weights=[0.2, 2.0, 3.0], ignore_index=255,
     ).to(device)
-    skel_loss_fn = BinaryHeadLoss(pos_weight=50.0).to(device)
-    ep_loss_fn = BinaryHeadLoss(pos_weight=100.0).to(device)
-    jn_loss_fn = BinaryHeadLoss(pos_weight=100.0).to(device)
+    # pos_weight matched to actual sparsity:
+    #   skeleton ~0.18% positive → ratio ~550:1
+    #   endpoints/junctions even sparser after Gaussian blur
+    skel_loss_fn = BinaryHeadLoss(pos_weight=200.0, dice_weight=0.2).to(device)
+    ep_loss_fn = BinaryHeadLoss(pos_weight=500.0, dice_weight=0.2).to(device)
+    jn_loss_fn = BinaryHeadLoss(pos_weight=500.0, dice_weight=0.2).to(device)
     width_loss_fn = WidthRegressionLoss()
 
     param_count = sum(p.numel() for p in model.parameters())
