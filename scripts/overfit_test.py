@@ -149,44 +149,68 @@ def discover_samples(data_root: Path, num_samples: int) -> list[tuple[Path, Path
 
 
 class SimpleMultiHeadModel(torch.nn.Module):
-    """Minimal multi-head model for overfit testing.
+    """Minimal U-Net-style model for overfit testing.
 
-    Uses a tiny encoder (3 conv layers) instead of MiT-B2
-    so the test runs fast without downloading pretrained weights.
+    Uses a small encoder-decoder with skip connections so the model
+    has enough receptive field and capacity to overfit 16 samples.
     """
 
     def __init__(self, num_classes: int = 3) -> None:
         super().__init__()
-        # Tiny encoder
-        self.encoder = torch.nn.Sequential(
-            torch.nn.Conv2d(3, 32, 3, padding=1),
-            torch.nn.GroupNorm(8, 32),
-            torch.nn.GELU(),
-            torch.nn.Conv2d(32, 64, 3, padding=1),
-            torch.nn.GroupNorm(16, 64),
-            torch.nn.GELU(),
-            torch.nn.Conv2d(64, 64, 3, padding=1),
-            torch.nn.GroupNorm(16, 64),
-            torch.nn.GELU(),
-        )
-        # Heads (same interface as MorphoAuxNet)
-        self.seg_head = torch.nn.Conv2d(64, num_classes, 1)
-        self.skeleton_head = torch.nn.Conv2d(64, 1, 1)
-        self.endpoint_head = torch.nn.Conv2d(64, 1, 1)
-        self.junction_head = torch.nn.Conv2d(64, 1, 1)
+        # Encoder (downsample 3 times: 512->256->128->64)
+        self.enc1 = self._block(3, 32)
+        self.enc2 = self._block(32, 64)
+        self.enc3 = self._block(64, 128)
+        self.pool = torch.nn.MaxPool2d(2)
+
+        # Bottleneck
+        self.bottleneck = self._block(128, 256)
+
+        # Decoder (upsample back)
+        self.up3 = torch.nn.ConvTranspose2d(256, 128, 2, stride=2)
+        self.dec3 = self._block(256, 128)  # 128 skip + 128 up
+        self.up2 = torch.nn.ConvTranspose2d(128, 64, 2, stride=2)
+        self.dec2 = self._block(128, 64)
+        self.up1 = torch.nn.ConvTranspose2d(64, 32, 2, stride=2)
+        self.dec1 = self._block(64, 32)
+
+        # Heads
+        self.seg_head = torch.nn.Conv2d(32, num_classes, 1)
+        self.skeleton_head = torch.nn.Conv2d(32, 1, 1)
+        self.endpoint_head = torch.nn.Conv2d(32, 1, 1)
+        self.junction_head = torch.nn.Conv2d(32, 1, 1)
         self.width_head = torch.nn.Sequential(
-            torch.nn.Conv2d(64, 1, 1),
+            torch.nn.Conv2d(32, 1, 1),
             torch.nn.Softplus(),
         )
 
+    @staticmethod
+    def _block(in_ch: int, out_ch: int) -> torch.nn.Sequential:
+        return torch.nn.Sequential(
+            torch.nn.Conv2d(in_ch, out_ch, 3, padding=1),
+            torch.nn.GroupNorm(min(8, out_ch), out_ch),
+            torch.nn.GELU(),
+            torch.nn.Conv2d(out_ch, out_ch, 3, padding=1),
+            torch.nn.GroupNorm(min(8, out_ch), out_ch),
+            torch.nn.GELU(),
+        )
+
     def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
-        features = self.encoder(x)
+        e1 = self.enc1(x)
+        e2 = self.enc2(self.pool(e1))
+        e3 = self.enc3(self.pool(e2))
+        b = self.bottleneck(self.pool(e3))
+
+        d3 = self.dec3(torch.cat([self.up3(b), e3], dim=1))
+        d2 = self.dec2(torch.cat([self.up2(d3), e2], dim=1))
+        d1 = self.dec1(torch.cat([self.up1(d2), e1], dim=1))
+
         return {
-            "seg": self.seg_head(features),
-            "skeleton": self.skeleton_head(features),
-            "endpoints": self.endpoint_head(features),
-            "junctions": self.junction_head(features),
-            "width": self.width_head(features),
+            "seg": self.seg_head(d1),
+            "skeleton": self.skeleton_head(d1),
+            "endpoints": self.endpoint_head(d1),
+            "junctions": self.junction_head(d1),
+            "width": self.width_head(d1),
         }
 
 
@@ -194,8 +218,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Overfit test for multi-head model")
     parser.add_argument("--data-root", type=Path, default=Path("data/raw"))
     parser.add_argument("--num-samples", type=int, default=16)
-    parser.add_argument("--epochs", type=int, default=50)
-    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--epochs", type=int, default=200)
+    parser.add_argument("--lr", type=float, default=3e-3)
     parser.add_argument("--output", type=Path, default=Path("runs/overfit_test"))
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
