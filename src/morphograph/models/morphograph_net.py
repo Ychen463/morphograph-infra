@@ -39,6 +39,7 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from transformers import SegformerModel
 
 
 # MiT-B2 per-stage output channels.
@@ -296,16 +297,22 @@ class MorphoAuxNet(nn.Module):
     def _build_encoder(backbone: str) -> nn.Module:
         """Build the shared encoder backbone.
 
-        Integration: use transformers.SegformerModel or timm mit_b2.
-        Pretrained: nvidia/segformer-b2-finetuned-ade-512-512
+        Uses HuggingFace SegformerModel pretrained on ADE20K.
+        Returns the encoder portion which outputs multi-scale features.
         """
-        # TODO: integrate HuggingFace SegformerModel or timm mit_b2
-        raise NotImplementedError(
-            f"Encoder '{backbone}' not yet implemented. "
-            "Use transformers.SegformerModel.from_pretrained("
-            "'nvidia/segformer-b2-finetuned-ade-512-512') "
-            "and extract .segformer.encoder"
+        pretrained_map = {
+            "mit_b2": "nvidia/segformer-b2-finetuned-ade-512-512",
+        }
+        if backbone not in pretrained_map:
+            raise ValueError(
+                f"Unsupported backbone '{backbone}'. "
+                f"Available: {list(pretrained_map.keys())}"
+            )
+        model = SegformerModel.from_pretrained(
+            pretrained_map[backbone],
+            output_hidden_states=True,
         )
+        return model.encoder
 
     def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
         """Forward pass: encoder -> FPN -> heads.
@@ -326,7 +333,10 @@ class MorphoAuxNet(nn.Module):
             width: (B, 1, H, W) width values (non-negative).
         """
         input_size = x.shape[2:]  # (H, W)
-        features = self.encoder(x)  # list of 4 multi-scale feature maps
+        # HuggingFace SegformerEncoder returns BaseModelOutput;
+        # hidden_states[1:] gives the 4 stage outputs.
+        enc_out = self.encoder(x, output_hidden_states=True, return_dict=True)
+        features = list(enc_out.hidden_states[1:])  # 4 stage feature maps
 
         # Shared FPN features at full input resolution
         fpn_features = self.fpn(features, target_size=input_size)
