@@ -183,11 +183,6 @@ def _soft_dilate(x: torch.Tensor) -> torch.Tensor:
     return F.max_pool2d(x, kernel_size=3, stride=1, padding=1)
 
 
-def _soft_open(x: torch.Tensor) -> torch.Tensor:
-    """Soft morphological opening: erode then dilate."""
-    return _soft_dilate(_soft_erode(x))
-
-
 def _soft_skeletonize(x: torch.Tensor, num_iters: int = 10) -> torch.Tensor:
     """Differentiable soft skeletonization.
 
