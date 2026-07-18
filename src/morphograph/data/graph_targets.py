@@ -190,9 +190,12 @@ def _trace_branches(
                     nr2, nc2 = cr + dr2, cc + dc2
                     if not (0 <= nr2 < h and 0 <= nc2 < w):
                         continue
+                    # Never walk back to the starting keypoint
+                    if (nr2, nc2) == (sr, sc):
+                        continue
                     if not skeleton[nr2, nc2] or visited[nr2, nc2]:
                         # Allow reaching a keypoint even if "visited"
-                        if (nr2, nc2) in kp_map and (nr2, nc2) != (sr, sc):
+                        if (nr2, nc2) in kp_map:
                             path.append((nr2, nc2))
                             end_idx = kp_map[(nr2, nc2)]
                             branches.append((
