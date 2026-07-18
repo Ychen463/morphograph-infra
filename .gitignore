@@ -8,9 +8,12 @@ dist/
 build/
 *.egg
 
-# Data (keep manifests, ignore raw and derived)
-data/raw/
-data/derived/
+# Data (keep directory structure via .gitkeep, ignore actual data)
+data/raw/*
+data/derived/*
+data/gold/qc_dev/*
+data/gold/gold_test/*
+!data/**/.gitkeep
 
 # Experiment outputs
 runs/
