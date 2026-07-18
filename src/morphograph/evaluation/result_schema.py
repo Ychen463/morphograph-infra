@@ -14,28 +14,37 @@ import subprocess
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
+
+
+# Fields that must be non-empty for a result to be considered valid.
+_REQUIRED_FIELDS = (
+    "experiment_name",
+    "git_commit",
+    "config_hash",
+    "dataset_manifest_hash",
+    "split_manifest_hash",
+    "graph_label_version",
+    "fold",
+    "checkpoint_selection_metric",
+)
+
+
+def _get_git_commit() -> str:
+    """Return the short SHA of HEAD, or 'unknown' if not in a git repo."""
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return "unknown"
 
 
 @dataclass
 class ExperimentResult:
-    """Structured result from a single experiment run.
-
-    Attributes:
-        experiment_name: name matching the config file.
-        git_commit: short SHA of the code version used.
-        timestamp: ISO-format timestamp of when the run completed.
-        config_path: path to the config file used.
-        config_hash: SHA-256 of the full experiment config.
-        dataset_manifest_hash: SHA-256 of the dataset manifest file.
-        split_manifest_hash: SHA-256 of the split assignment file.
-        graph_label_version: version tag of the graph label pipeline.
-        metrics: dict of metric_name -> value (supports nested per-domain).
-        seed: random seed used.
-        fold: LODO fold identifier (held-out domain).
-        checkpoint_selection_metric: metric used to select the best checkpoint.
-        extra: any additional metadata.
-    """
+    """Structured result from a single experiment run."""
 
     experiment_name: str
     git_commit: str
@@ -67,17 +76,9 @@ class ExperimentResult:
         **extra: Any,
     ) -> ExperimentResult:
         """Factory method that auto-fills git commit and timestamp."""
-        try:
-            commit = subprocess.check_output(
-                ["git", "rev-parse", "--short", "HEAD"],
-                text=True,
-            ).strip()
-        except subprocess.CalledProcessError:
-            commit = "unknown"
-
         return cls(
             experiment_name=experiment_name,
-            git_commit=commit,
+            git_commit=_get_git_commit(),
             timestamp=datetime.now().isoformat(),
             config_path=config_path,
             config_hash=config_hash,
@@ -90,6 +91,27 @@ class ExperimentResult:
             checkpoint_selection_metric=checkpoint_selection_metric,
             extra=extra,
         )
+
+    @classmethod
+    def load(cls, path: Path) -> ExperimentResult:
+        """Load a result from a JSON file."""
+        data = json.loads(Path(path).read_text())
+        return cls(**data)
+
+    def validate(self) -> list[str]:
+        """Check that all governance-required fields are populated.
+
+        Returns:
+            List of violation messages (empty if valid).
+        """
+        violations = []
+        for fname in _REQUIRED_FIELDS:
+            val = getattr(self, fname)
+            if not val or val == "unknown":
+                violations.append(f"Field '{fname}' is missing or unknown")
+        if not self.metrics:
+            violations.append("No metrics recorded")
+        return violations
 
     def save(self, output_dir: Path) -> Path:
         """Save result as JSON to output_dir."""

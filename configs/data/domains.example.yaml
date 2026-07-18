@@ -1,33 +1,98 @@
 # Domain configuration for multi-site infrastructure datasets.
-# Each domain represents a distinct data source (site, sensor, or collection campaign).
+
+# ── Resolution protocol ──
+# native_resolution: original image size on disk.
+# training_resolution: size used after resize (configured in experiment YAML).
+# All models train at 512x512 regardless of native resolution.
+# When reporting pixel-level engineering metrics, scale by
+# native/training ratio if needed.
+
+# ── Primary dataset: DamSegment ──
+# 1500 images, 3 difficulty tiers (500 each).
+# Mask encoding: RGB (R>127 = crack, B>127 = spalling).
+# After decoding, three classes are mutually exclusive (no pixel overlap).
+# Class pixel frequencies (measured): BG 96.6%, Crack 2.2%, Spalling 1.2%.
 
 domains:
-  dam_site_a:
-    name: "Dam Site A"
-    image_dir: "dam_site_a/images"
-    mask_dir: "dam_site_a/masks"
+  damsegment_easy:
+    name: "DamSegment Easy"
+    image_dir: "DamSegment/Damage Segmentaion/Easy/Images"
+    mask_dir: "DamSegment/Damage Segmentaion/Easy/Labels/Mask"
+    mask_format: "rgb"  # needs decode_rgb_mask()
+    native_resolution: [640, 640]
     original_classes:
       0: background
       1: crack
       2: spalling
-    resolution_mm_per_px: 0.5
-    group_id: "site_a"
+    resolution_mm_per_px: null  # no calibration available
+    group_id: "damsegment"
+    difficulty: "easy"
+    num_images: 500
 
-  dam_site_b:
-    name: "Dam Site B"
-    image_dir: "dam_site_b/images"
-    mask_dir: "dam_site_b/masks"
+  damsegment_medium:
+    name: "DamSegment Medium"
+    image_dir: "DamSegment/Damage Segmentaion/Medium/Images"
+    mask_dir: "DamSegment/Damage Segmentaion/Medium/Labels/Mask"
+    mask_format: "rgb"
+    native_resolution: [640, 640]
     original_classes:
       0: background
       1: crack
       2: spalling
-      3: efflorescence
-    resolution_mm_per_px: 0.3
-    group_id: "site_b"
+    resolution_mm_per_px: null
+    group_id: "damsegment"
+    difficulty: "medium"
+    num_images: 500
 
-# Canonical class mapping applied after per-domain remapping
+  damsegment_hard:
+    name: "DamSegment Hard"
+    image_dir: "DamSegment/Damage Segmentaion/Hard/Images"
+    mask_dir: "DamSegment/Damage Segmentaion/Hard/Labels/Mask"
+    mask_format: "rgb"
+    native_resolution: [640, 640]
+    original_classes:
+      0: background
+      1: crack
+      2: spalling
+    resolution_mm_per_px: null
+    group_id: "damsegment"
+    difficulty: "hard"
+    num_images: 500
+
+  # ── Secondary dataset: s2ds (out-of-distribution) ──
+  # 743 images, 512x512 PNG.
+  # Contains additional defect types beyond crack/spalling.
+  # Non-compatible classes must map to ignore (255), NOT background.
+  # Otherwise the model learns to classify real defects as background,
+  # systematically polluting cross-domain evaluation.
+  s2ds:
+    name: "S2DS"
+    image_dir: "s2ds/images"
+    mask_dir: "s2ds/masks"
+    mask_format: "indexed"
+    native_resolution: [512, 512]
+    original_classes:
+      0: background
+      1: crack
+      2: spalling
+      # Any other class IDs in s2ds should map to 255 (ignore)
+      # via the adapter's CLASS_MAP. Do NOT map unknown defects
+      # to background.
+    resolution_mm_per_px: null
+    group_id: "s2ds"
+    difficulty: null
+    num_images: 743
+
+# Canonical class mapping applied after per-domain remapping.
 canonical_classes:
   0: background
   1: crack
   2: spalling
   255: ignore
+
+# Measured class pixel frequencies (DamSegment only).
+# These inform CE weights but are not data-level properties.
+class_frequencies:
+  background: 0.966
+  crack: 0.022
+  spalling: 0.012

@@ -1,56 +1,71 @@
-# Baseline experiment: mask-only SegFormer-B2.
-# No graph heads, no morphological targets — pure semantic segmentation.
+# B0: Mask-only SegFormer-B2 baseline.
+# All B0-B5 use the same training budget for fair ablation.
 
 experiment:
   name: "B0_segformer_mask_only"
-  description: "SegFormer-B2 baseline with standard CE+Dice loss"
+  description: "SegFormer-B2 baseline with CE+Dice loss (no morphology heads)"
+  baseline_id: "B0"
 
 model:
   backbone: "mit_b2"
-  pretrained: true
-  # Heads to enable (mask-only baseline uses only seg_head)
+  pretrained: "nvidia/segformer-b2-finetuned-ade-512-512"
   heads:
     seg_head: true
+    skeleton_head: false
     endpoint_head: false
     junction_head: false
-    edge_decoder: false
     width_head: false
-    spalling_region_head: false
-    relation_head: false
   num_classes: 3  # background, crack, spalling
+  fpn_dim: 256
 
 data:
-  # Reference to domain config
   domains_config: "configs/data/domains.example.yaml"
-  # Reference to split protocol
   protocol_config: "configs/protocols/lodo.example.yaml"
+  # DamSegment native: 640x640, s2ds native: 512x512.
+  # All models train at 512x512 for consistency.
   img_size: [512, 512]
-  # Augmentation intensity
   augmentation: "medium"
 
 training:
   optimizer: "adamw"
-  lr: 6.0e-5
-  weight_decay: 0.01
+  # Differential LR: encoder (pretrained) vs new layers.
+  # These are initial configs from sibling project; must be
+  # re-confirmed on validation groups after split freeze.
+  encoder_lr: 6.0e-5
+  head_lr: 6.0e-4
+  weight_decay: 1.0e-4
   scheduler: "cosine"
   warmup_epochs: 5
+  # UNIFORM budget: all B0-B5 use 100 epochs.
+  # Do not give graph-head models more epochs — that confounds
+  # "more supervision" with "more training".
   max_epochs: 100
-  batch_size: 8
+  batch_size: 4
   num_workers: 4
-  # Loss weights
+  mixed_precision: true
+
+  # B0 loss: only CE + Dice.
   loss:
-    ce_weight: 1.0
-    dice_weight: 1.0
+    ce_weight: 0.5
+    dice_weight: 0.5
+    ce_class_weights: [0.2, 2.0, 3.0]
 
 evaluation:
   metrics:
-    - "mIoU"
+    - "mIoU_fg"
+    - "mIoU_all"
+    - "per_class_IoU"
     - "BF1"
     - "clDice"
-  # Per-domain breakdown
+    - "ConnR"
   per_domain: true
+  boundary_tolerance_px: 2
+
+checkpoint:
+  selection_metric: "val_mIoU_fg"
+  save_last: true
+  save_best: true
 
 seed: 42
 device: "cuda"
-# WandB project (optional)
 wandb_project: "morphograph-infra"

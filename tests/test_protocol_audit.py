@@ -3,7 +3,11 @@
 from pathlib import Path
 
 from morphograph.data.schema import SampleRecord
-from morphograph.evaluation.protocol_audit import audit_split, check_split_leakage
+from morphograph.evaluation.protocol_audit import (
+    audit_split,
+    check_split_leakage,
+    check_val_domain_leakage,
+)
 
 
 def _make_record(sample_id: str, group_id: str, split: str) -> SampleRecord:
@@ -40,11 +44,58 @@ def test_leakage_detected():
     assert "A" in violations[0]
 
 
+def test_val_from_train_domains_passes():
+    """Val samples from training domains should pass."""
+    records = [
+        _make_record("s1", "A", "train"),
+        _make_record("s2", "A", "val"),
+        _make_record("s3", "B", "test"),
+    ]
+    violations = check_val_domain_leakage(records)
+    assert len(violations) == 0
+
+
+def test_val_from_test_domain_fails():
+    """Val samples from the test domain should be flagged."""
+    records = [
+        _make_record("s1", "A", "train"),
+        _make_record("s2", "B", "val"),
+        _make_record("s3", "B", "test"),
+    ]
+    violations = check_val_domain_leakage(records)
+    assert len(violations) > 0
+
+
+def test_val_from_unknown_domain_fails():
+    """Val samples from a domain not in training should be flagged."""
+    records = [
+        _make_record("s1", "A", "train"),
+        _make_record("s2", "C", "val"),
+        _make_record("s3", "B", "test"),
+    ]
+    violations = check_val_domain_leakage(records)
+    assert len(violations) > 0
+
+
 def test_audit_report_passes_on_clean():
     """Full audit should report passed=True on clean split."""
     records = [
         _make_record("s1", "A", "train"),
-        _make_record("s2", "B", "test"),
+        _make_record("s2", "A", "val"),
+        _make_record("s3", "B", "test"),
     ]
     report = audit_split(records)
     assert report["passed"] is True
+    assert report["duplicate_check_status"] == "skipped"
+
+
+def test_audit_report_fails_on_val_leakage():
+    """Full audit should catch val-domain leakage."""
+    records = [
+        _make_record("s1", "A", "train"),
+        _make_record("s2", "B", "val"),
+        _make_record("s3", "B", "test"),
+    ]
+    report = audit_split(records)
+    assert report["passed"] is False
+    assert len(report["val_domain_violations"]) > 0

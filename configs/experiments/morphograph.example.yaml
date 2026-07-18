@@ -1,28 +1,23 @@
-# Full MorphoGraph experiment: shared encoder + all heads.
-# Combines segmentation with morphological graph learning.
+# B5: SegFormer-B2 + skeleton + endpoint + junction + width heads.
+# Same training budget as B0 for fair comparison.
+# This is a morphology auxiliary model, not yet graph reconstruction.
 
 experiment:
-  name: "MG1_full_morphograph"
-  description: "MorphoGraph-Net with all heads enabled"
+  name: "B5_morpho_aux_full"
+  description: "Mask + skeleton + endpoint + junction + width prediction"
+  baseline_id: "B5"
 
 model:
   backbone: "mit_b2"
-  pretrained: true
+  pretrained: "nvidia/segformer-b2-finetuned-ade-512-512"
   heads:
     seg_head: true
+    skeleton_head: true
     endpoint_head: true
     junction_head: true
-    edge_decoder: true
     width_head: true
-    spalling_region_head: true
-    relation_head: true
   num_classes: 3
-  # Graph construction parameters
-  graph:
-    # Minimum skeleton branch length to keep (pixels)
-    min_branch_length: 10
-    # Junction merge radius (pixels)
-    junction_merge_radius: 5
+  fpn_dim: 256
 
 data:
   domains_config: "configs/data/domains.example.yaml"
@@ -32,32 +27,60 @@ data:
 
 training:
   optimizer: "adamw"
-  lr: 6.0e-5
-  weight_decay: 0.01
+  encoder_lr: 6.0e-5
+  head_lr: 6.0e-4
+  weight_decay: 1.0e-4
   scheduler: "cosine"
   warmup_epochs: 5
-  max_epochs: 150
-  batch_size: 8
+  max_epochs: 100  # same as B0
+  batch_size: 4
   num_workers: 4
+  mixed_precision: true
+
+  # B5 loss = B0 loss + per-head losses.
+  # Each head's loss is independent — no cross-head terms.
   loss:
-    ce_weight: 1.0
-    dice_weight: 1.0
+    # Segmentation (same as B0)
+    ce_weight: 0.5
+    dice_weight: 0.5
+    ce_class_weights: [0.2, 2.0, 3.0]
+    # Skeleton (BCE+Dice, high pos_weight for sparsity)
+    skeleton_weight: 1.0
+    skeleton_pos_weight: 50.0
+    # Endpoint/junction (BCE with high pos_weight)
     endpoint_weight: 0.5
+    endpoint_pos_weight: 100.0
     junction_weight: 0.5
-    edge_weight: 1.0
+    junction_pos_weight: 100.0
+    # Width (Smooth L1, masked to skeleton pixels)
     width_weight: 0.5
-    spalling_region_weight: 0.5
-    relation_weight: 0.5
+    width_use_log: false
+
+  # Note: clDice and boundary losses are NOT included here.
+  # They belong to B1a and ablation variants respectively.
+  # Adding them here would confound "graph supervision" with
+  # "topology loss" in the ablation.
 
 evaluation:
   metrics:
-    - "mIoU"
+    - "mIoU_fg"
+    - "mIoU_all"
+    - "per_class_IoU"
     - "BF1"
     - "clDice"
-    - "graph_edit_distance"
+    - "ConnR"
+    # Graph metrics (evaluated on gold test set)
     - "endpoint_f1"
     - "junction_f1"
+    - "width_MAE"
   per_domain: true
+  boundary_tolerance_px: 2
+  keypoint_tolerance_px: 5
+
+checkpoint:
+  selection_metric: "val_mIoU_fg"
+  save_last: true
+  save_best: true
 
 seed: 42
 device: "cuda"

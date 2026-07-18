@@ -7,11 +7,12 @@ into a list of SampleRecords with canonical class mapping.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import ClassVar
 
 import numpy as np
 
-from .schema import SampleRecord
+from .schema import SampleRecord, decode_rgb_mask
 
 
 class DatasetAdapter(ABC):
@@ -27,6 +28,9 @@ class DatasetAdapter(ABC):
     # Must be defined by each subclass.
     CLASS_MAP: ClassVar[dict[int, int]]
 
+    # Mask format: "indexed" (standard) or "rgb" (DamSegment-style).
+    MASK_FORMAT: ClassVar[str] = "indexed"
+
     @abstractmethod
     def discover_samples(self) -> list[SampleRecord]:
         """Scan the raw dataset and return a list of SampleRecords."""
@@ -35,13 +39,19 @@ class DatasetAdapter(ABC):
     def to_canonical(self, mask: np.ndarray) -> np.ndarray:
         """Remap a raw annotation mask to canonical class IDs.
 
+        For RGB masks (DamSegment), use decode_rgb_mask first.
+        For indexed masks, remap via CLASS_MAP.
+
         Args:
-            mask: HxW array with original class IDs.
+            mask: HxW or HxWx3 array with original encoding.
 
         Returns:
-            HxW array with canonical class IDs (unmapped classes become 255/ignore).
+            HxW uint8 array with canonical class IDs (unmapped -> 255/ignore).
         """
-        out = np.full_like(mask, fill_value=255, dtype=np.uint8)
+        if self.MASK_FORMAT == "rgb":
+            return decode_rgb_mask(mask)
+
+        out = np.full(mask.shape[:2], fill_value=255, dtype=np.uint8)
         for src, dst in self.CLASS_MAP.items():
             out[mask == src] = dst
         return out
@@ -65,3 +75,8 @@ def get_adapter(domain_id: str) -> type[DatasetAdapter]:
         raise KeyError(f"No adapter registered for domain '{domain_id}'. "
                        f"Available: {list(_REGISTRY.keys())}")
     return _REGISTRY[domain_id]
+
+
+def list_adapters() -> list[str]:
+    """List all registered domain adapter IDs."""
+    return list(_REGISTRY.keys())
