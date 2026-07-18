@@ -168,6 +168,128 @@ class WeightedCEDiceLoss(nn.Module):
         return {"ce": ce, "dice": dice, "total": total}
 
 
+# ---------------------------------------------------------------------------
+# clDice: differentiable centerline Dice
+# ---------------------------------------------------------------------------
+
+def _soft_erode(x: torch.Tensor) -> torch.Tensor:
+    """Differentiable morphological erosion using min-pool."""
+    # Negate, max-pool, negate = min-pool
+    return -F.max_pool2d(-x, kernel_size=3, stride=1, padding=1)
+
+
+def _soft_dilate(x: torch.Tensor) -> torch.Tensor:
+    """Differentiable morphological dilation using max-pool."""
+    return F.max_pool2d(x, kernel_size=3, stride=1, padding=1)
+
+
+def _soft_open(x: torch.Tensor) -> torch.Tensor:
+    """Soft morphological opening: erode then dilate."""
+    return _soft_dilate(_soft_erode(x))
+
+
+def _soft_skeletonize(x: torch.Tensor, num_iters: int = 10) -> torch.Tensor:
+    """Differentiable soft skeletonization.
+
+    Iteratively subtracts the soft-opened image from the soft-eroded image,
+    accumulating the skeleton. Must run in float32 (fp16 is unstable).
+
+    Args:
+        x: (B, 1, H, W) soft probability map in [0, 1].
+        num_iters: number of erosion iterations.
+
+    Returns:
+        (B, 1, H, W) soft skeleton.
+    """
+    skeleton = torch.zeros_like(x)
+    current = x.clone()
+    for _ in range(num_iters):
+        eroded = _soft_erode(current)
+        opened = _soft_dilate(eroded)
+        delta = torch.clamp(current - opened, min=0.0)
+        skeleton = torch.max(skeleton, delta)
+        current = eroded
+    return skeleton
+
+
+class SoftCLDiceLoss(nn.Module):
+    """Differentiable clDice loss for topology-aware segmentation.
+
+    clDice = 2 * tprec * tsens / (tprec + tsens)
+    where:
+        tprec = |skel(pred) ∩ target| / |skel(pred)|  (topology precision)
+        tsens = |skel(target) ∩ pred| / |skel(target)| (topology sensitivity)
+
+    This loss encourages the prediction to preserve crack centerlines,
+    improving structural connectivity without explicit graph supervision.
+
+    Must run in float32 — fp16 causes NaN in soft skeletonization.
+
+    Args:
+        num_iters: erosion iterations for soft skeletonization.
+        target_class: which class to compute clDice for (1=crack).
+    """
+
+    def __init__(
+        self,
+        num_iters: int = 10,
+        target_class: int = 1,
+        ignore_index: int = 255,
+    ) -> None:
+        super().__init__()
+        self.num_iters = num_iters
+        self.target_class = target_class
+        self.ignore_index = ignore_index
+
+    def forward(
+        self,
+        logits: torch.Tensor,
+        targets: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Args:
+            logits: (B, C, H, W) raw class logits.
+            targets: (B, H, W) integer class labels.
+
+        Returns:
+            1 - clDice (scalar loss).
+        """
+        # Extract soft prediction for target class
+        with torch.amp.autocast("cuda", enabled=False):
+            logits_f32 = logits.float()
+            probs = F.softmax(logits_f32, dim=1)
+            pred_soft = probs[:, self.target_class].unsqueeze(1)  # (B,1,H,W)
+
+            # Binary target
+            valid = (targets != self.ignore_index).float().unsqueeze(1)
+            target_bin = (targets == self.target_class).float().unsqueeze(1)
+
+            # Mask out invalid regions
+            pred_soft = pred_soft * valid
+            target_bin = target_bin * valid
+
+            if target_bin.sum() < 1.0:
+                return torch.tensor(0.0, device=logits.device, requires_grad=True)
+
+            # Soft skeletonize
+            skel_pred = _soft_skeletonize(pred_soft, self.num_iters)
+            skel_target = _soft_skeletonize(target_bin, self.num_iters)
+
+            # Topology precision: skeleton of pred inside GT
+            tprec_num = (skel_pred * target_bin).sum()
+            tprec_den = skel_pred.sum() + 1e-8
+
+            # Topology sensitivity: skeleton of GT inside pred
+            tsens_num = (skel_target * pred_soft).sum()
+            tsens_den = skel_target.sum() + 1e-8
+
+            tprec = tprec_num / tprec_den
+            tsens = tsens_num / tsens_den
+
+            cldice = 2.0 * tprec * tsens / (tprec + tsens + 1e-8)
+            return 1.0 - cldice
+
+
 class TverskyLoss(nn.Module):
     """Tversky loss for a single class. Ablation variant, not default.
 
