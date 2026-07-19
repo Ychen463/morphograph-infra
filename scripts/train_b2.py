@@ -20,14 +20,13 @@ from pathlib import Path
 import numpy as np
 import torch
 from PIL import Image
-from scipy import ndimage
-from skimage.morphology import skeletonize
 from torch.utils.data import Dataset, DataLoader
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from morphograph.data.schema import decode_rgb_mask, NUM_CLASSES, DEFAULT_CE_WEIGHTS
+from morphograph.data.graph_targets import mask_to_skeleton
 from morphograph.losses.composite import WeightedCEDiceLoss, BinaryHeadLoss
 from morphograph.models.morphograph_net import MorphoAuxNet, BASELINE_HEADS
 from morphograph.training.utils import (
@@ -96,12 +95,9 @@ class DamSegmentSkeletonDataset(Dataset):
         else:
             mask = mask_raw.astype(np.uint8)
 
-        # Generate skeleton from crack class
+        # Generate skeleton from crack class (with morphological pre/post processing)
         crack_binary = (mask == 1).astype(np.uint8)
-        if crack_binary.any():
-            skel = skeletonize(crack_binary.astype(bool)).astype(np.uint8)
-        else:
-            skel = np.zeros_like(crack_binary, dtype=np.uint8)
+        skel = mask_to_skeleton(crack_binary).astype(np.uint8)
 
         if self._transform is not None:
             transformed = self._transform(image=img, mask=mask, skeleton=skel)

@@ -25,12 +25,12 @@ import numpy as np
 import torch
 from PIL import Image
 from scipy import ndimage
-from skimage.morphology import skeletonize
 from torch.utils.data import DataLoader
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from morphograph.data.schema import decode_rgb_mask, NUM_CLASSES
+from morphograph.data.graph_targets import mask_to_skeleton
 from morphograph.models.morphograph_net import MorphoAuxNet, BASELINE_HEADS
 from morphograph.metrics.segmentation import (
     compute_iou, compute_cldice, compute_connectivity_recall, compute_boundary_f1,
@@ -159,7 +159,7 @@ def analyze_skeleton_quality(
         total_px = mask.size
         crack_pixel_fractions.append(crack_px / total_px)
 
-        skel = skeletonize(crack.astype(bool))
+        skel = mask_to_skeleton(crack)
         skel_px = skel.sum()
         if skel_px == 0:
             continue

@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from scipy import ndimage
 from scipy.spatial.distance import cdist
-from skimage.morphology import skeletonize
+from skimage.morphology import skeletonize, disk, binary_closing, binary_opening
 
 
 @dataclass
@@ -42,16 +42,76 @@ class CrackGraph:
         return np.concatenate(parts, axis=0)
 
 
-def mask_to_skeleton(binary_mask: np.ndarray) -> np.ndarray:
-    """Skeletonize a binary crack mask.
+def mask_to_skeleton(
+    binary_mask: np.ndarray,
+    closing_radius: int = 3,
+    min_component_px: int = 20,
+    spur_length: int = 8,
+) -> np.ndarray:
+    """Skeletonize a binary crack mask with pre/post processing.
+
+    Pre-processing: morphological closing to bridge narrow gaps and reduce
+    fragmentation, then opening to remove tiny noise blobs.
+
+    Post-processing: remove small connected components and prune short spurs
+    to produce a clean, high-coverage skeleton.
 
     Args:
         binary_mask: HxW boolean or uint8 array (nonzero = crack).
+        closing_radius: disk radius for morphological closing (bridges gaps).
+        min_component_px: remove skeleton components smaller than this.
+        spur_length: prune endpoint branches shorter than this many pixels.
 
     Returns:
         HxW boolean skeleton.
     """
-    return skeletonize(binary_mask.astype(bool))
+    mask = binary_mask.astype(bool)
+    if not mask.any():
+        return mask
+
+    # Pre-processing: close gaps, then remove small noise
+    if closing_radius > 0:
+        selem = disk(closing_radius)
+        mask = binary_closing(mask, selem)
+        mask = binary_opening(mask, disk(1))
+
+    # Skeletonize
+    skel = skeletonize(mask)
+
+    # Post-processing: remove small connected components
+    if min_component_px > 0:
+        labeled, n_comp = ndimage.label(skel)
+        if n_comp > 0:
+            comp_sizes = ndimage.sum(skel, labeled, range(1, n_comp + 1))
+            for i, size in enumerate(comp_sizes, 1):
+                if size < min_component_px:
+                    skel[labeled == i] = False
+
+    # Post-processing: iterative spur pruning
+    if spur_length > 0:
+        skel = _prune_spurs(skel, spur_length)
+
+    return skel
+
+
+def _prune_spurs(skeleton: np.ndarray, max_spur_length: int) -> np.ndarray:
+    """Remove short endpoint branches (spurs) from skeleton.
+
+    Iteratively finds endpoints (1-neighbor pixels) and removes them
+    if the branch from the endpoint is shorter than max_spur_length.
+    """
+    skel = skeleton.copy()
+    kernel = np.ones((3, 3), dtype=np.uint8)
+    kernel[1, 1] = 0
+
+    for _ in range(max_spur_length):
+        counts = ndimage.convolve(skel.astype(np.uint8), kernel, mode="constant", cval=0)
+        endpoints = (counts == 1) & skel
+        if not endpoints.any():
+            break
+        skel[endpoints] = False
+
+    return skel
 
 
 def _neighbor_count(skeleton: np.ndarray) -> np.ndarray:
