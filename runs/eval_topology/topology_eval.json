@@ -1,0 +1,82 @@
+{
+  "val_samples": 225,
+  "skeleton_quality": {
+    "num_analyzed": 45,
+    "avg_crack_pixel_fraction": 0.023057386610243057,
+    "avg_skeleton_pixel_fraction": 0.0019617716471354166,
+    "avg_spur_ratio": 0.014936730609830216,
+    "avg_coverage": 0.501213683563418,
+    "avg_fragmentation": 64.1,
+    "median_fragmentation": 52.0
+  },
+  "skeleton_issues": [
+    "Low coverage (0.50) \u2014 skeleton doesn't represent crack well",
+    "High fragmentation (64.1x) \u2014 skeleton has more components than crack mask"
+  ],
+  "results": {
+    "B0": {
+      "iou_crack": {
+        "mean": 0.5311791663003209,
+        "std": 0.16163305477043835,
+        "median": 0.5470750089720379
+      },
+      "iou_spalling": {
+        "mean": 0.15802601484159637,
+        "std": 0.3321643370620752,
+        "median": 0.0
+      },
+      "miou_fg": {
+        "mean": 0.3446025905709586,
+        "std": 0.1697232889478822,
+        "median": 0.29382470119506093
+      },
+      "cldice_crack": {
+        "mean": 0.8031147212852208,
+        "std": 0.1805365145081223,
+        "median": 0.8364079875341798
+      },
+      "connr_crack": {
+        "mean": 0.8522790174611037,
+        "std": 0.1997143630360266,
+        "median": 0.9090909090909091
+      },
+      "bf1_crack": {
+        "mean": 0.6091261498070917,
+        "std": 0.1654314541657038,
+        "median": 0.6304789751980769
+      }
+    },
+    "B2_w1.0": {
+      "iou_crack": {
+        "mean": 0.5237542002483485,
+        "std": 0.16275000012958984,
+        "median": 0.5460534195709881
+      },
+      "iou_spalling": {
+        "mean": 0.16129261470155615,
+        "std": 0.3333460431881576,
+        "median": 0.0
+      },
+      "miou_fg": {
+        "mean": 0.3425234074749523,
+        "std": 0.17147966925040925,
+        "median": 0.29429419941849216
+      },
+      "cldice_crack": {
+        "mean": 0.8003445650280785,
+        "std": 0.17675402507092583,
+        "median": 0.8348519969218207
+      },
+      "connr_crack": {
+        "mean": 0.8378488187152899,
+        "std": 0.20583203186957505,
+        "median": 0.9
+      },
+      "bf1_crack": {
+        "mean": 0.608632358630915,
+        "std": 0.1613861485032462,
+        "median": 0.6220544717561772
+      }
+    }
+  }
+}
