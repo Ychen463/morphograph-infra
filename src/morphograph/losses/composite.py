@@ -8,7 +8,7 @@ Loss assignments per baseline:
     B0:   CE + Dice
     B1a:  CE + Dice + clDice (scheduled)
     B1b:  CE + Dice + SRL
-    B2:   CE + Dice + skeleton BCE+Dice
+    B2:   CE + Dice + skeleton DT regression (SmoothL1)
     B3:   B2 + endpoint BCE + junction BCE
     B4:   B3 + edge connectivity loss
     B5:   B4 + width regression loss
@@ -73,9 +73,8 @@ class B1aLossConfig(B0LossConfig):
 
 @dataclass
 class B2LossConfig(B0LossConfig):
-    """B2: B0 + skeleton supervision."""
-    skeleton_weight: float = 1.0
-    skeleton_pos_weight: float = 50.0  # skeleton ~0.5% of crack pixels
+    """B2: B0 + skeleton DT regression supervision."""
+    skeleton_weight: float = 0.3
 
 
 @dataclass
@@ -327,6 +326,22 @@ class TverskyLoss(nn.Module):
 # Binary head losses (skeleton, endpoint, junction)
 # All heads output raw logits; use BCEWithLogitsLoss.
 # ---------------------------------------------------------------------------
+
+class DTRegressionLoss(nn.Module):
+    """SmoothL1 loss for distance transform regression, masked to crack pixels."""
+
+    def forward(self, pred: torch.Tensor, target: torch.Tensor,
+                mask: torch.Tensor) -> torch.Tensor:
+        """
+        pred: (B, 1, H, W) sigmoid output [0,1]
+        target: (B, 1, H, W) normalized DT [0,1]
+        mask: (B, 1, H, W) crack pixel mask
+        """
+        valid = mask.bool()
+        if not valid.any():
+            return torch.tensor(0.0, device=pred.device, requires_grad=True)
+        return F.smooth_l1_loss(pred[valid], target[valid])
+
 
 class BinaryHeadLoss(nn.Module):
     """BCE + Dice loss for sparse binary targets.

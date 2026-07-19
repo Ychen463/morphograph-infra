@@ -108,6 +108,32 @@ def mask_to_skeleton(
     return skel
 
 
+def mask_to_dt_target(binary_mask: np.ndarray) -> np.ndarray:
+    """Generate normalized distance transform target for crack supervision.
+
+    Per connected component: DT / max(DT) → centerline=1.0, boundary=0.0.
+    Non-crack pixels = 0.
+    """
+    mask = binary_mask.astype(bool)
+    if not mask.any():
+        return np.zeros_like(mask, dtype=np.float32)
+
+    mask_filled = ndimage.binary_fill_holes(mask)
+    dt = ndimage.distance_transform_edt(mask_filled)
+
+    labeled, n_comp = ndimage.label(mask_filled)
+    result = np.zeros_like(dt, dtype=np.float32)
+    for i in range(1, n_comp + 1):
+        comp_mask = labeled == i
+        max_val = dt[comp_mask].max()
+        if max_val > 0:
+            result[comp_mask] = dt[comp_mask] / max_val
+
+    # Clip to original mask (holes were filled for DT, but target only on original crack)
+    result[~mask] = 0
+    return result
+
+
 def _prune_spurs(skeleton: np.ndarray, max_spur_length: int) -> np.ndarray:
     """Remove short endpoint branches (spurs) from skeleton.
 

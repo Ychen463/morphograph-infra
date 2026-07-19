@@ -30,7 +30,7 @@ from torch.utils.data import DataLoader
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from morphograph.data.schema import decode_rgb_mask, NUM_CLASSES
-from morphograph.data.graph_targets import mask_to_skeleton
+from morphograph.data.graph_targets import mask_to_skeleton, mask_to_dt_target
 from morphograph.models.morphograph_net import MorphoAuxNet, BASELINE_HEADS
 from morphograph.metrics.segmentation import (
     compute_iou, compute_cldice, compute_connectivity_recall, compute_boundary_f1,
@@ -141,6 +141,8 @@ def analyze_skeleton_quality(
     frag_ratios = []
     skeleton_pixel_fractions = []
     crack_pixel_fractions = []
+    dt_densities = []
+    dt_mean_values = []
 
     for img_path, mask_path in val_pairs[:num_samples]:
         mask_raw = np.array(Image.open(mask_path).resize(
@@ -158,6 +160,13 @@ def analyze_skeleton_quality(
         crack_px = crack.sum()
         total_px = mask.size
         crack_pixel_fractions.append(crack_px / total_px)
+
+        # DT target stats
+        dt_target = mask_to_dt_target(crack)
+        dt_densities.append((dt_target > 0).sum() / total_px)
+        dt_positive = dt_target[dt_target > 0]
+        if len(dt_positive) > 0:
+            dt_mean_values.append(float(dt_positive.mean()))
 
         # Thick skeleton (dilated) for coverage/fragmentation/density
         skel = mask_to_skeleton(crack)
@@ -203,6 +212,9 @@ def analyze_skeleton_quality(
         "avg_coverage": float(np.mean(coverage_ratios)) if coverage_ratios else 0,
         "avg_fragmentation": float(np.mean(frag_ratios)) if frag_ratios else 0,
         "median_fragmentation": float(np.median(frag_ratios)) if frag_ratios else 0,
+        "avg_dt_density": float(np.mean(dt_densities)) if dt_densities else 0,
+        "avg_dt_mean_value": float(np.mean(dt_mean_values)) if dt_mean_values else 0,
+        "dt_coverage": 1.0,  # by construction, DT covers 100% of crack pixels
     }
 
 

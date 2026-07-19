@@ -1,12 +1,12 @@
-"""B2 training: B0 + skeleton head (explicit morphology supervision).
+"""B2 training: B0 + skeleton head (distance transform regression).
 
 Usage:
     python scripts/train_b2.py --data-root data/raw --output runs/B2
 
-B2 adds a skeleton prediction head with BCE+Dice loss, providing
-explicit dense morphology supervision. Same training budget as B0/B1a
-(100 epochs). Tests whether explicit skeleton targets improve
-segmentation quality vs topology-loss-only (B1a).
+B2 adds a skeleton prediction head with DT regression (SmoothL1) loss.
+Target is normalized distance transform of crack mask (centerline=1.0,
+boundary=0.0), masked to crack pixels only. Same training budget as
+B0/B1a (100 epochs).
 """
 
 from __future__ import annotations
@@ -26,8 +26,8 @@ from torch.utils.data import Dataset, DataLoader
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from morphograph.data.schema import decode_rgb_mask, NUM_CLASSES, DEFAULT_CE_WEIGHTS
-from morphograph.data.graph_targets import mask_to_skeleton
-from morphograph.losses.composite import WeightedCEDiceLoss, BinaryHeadLoss
+from morphograph.data.graph_targets import mask_to_dt_target
+from morphograph.losses.composite import WeightedCEDiceLoss, DTRegressionLoss
 from morphograph.models.morphograph_net import MorphoAuxNet, BASELINE_HEADS
 from morphograph.training.utils import (
     set_seed, discover_all_samples, split_data,
@@ -39,8 +39,8 @@ from morphograph.training.utils import (
 # Dataset with skeleton targets
 # ---------------------------------------------------------------------------
 
-class DamSegmentSkeletonDataset(Dataset):
-    """DamSegment dataset that also generates skeleton targets on-the-fly."""
+class DamSegmentDTDataset(Dataset):
+    """DamSegment dataset that generates distance transform targets on-the-fly."""
 
     def __init__(
         self,
@@ -75,7 +75,7 @@ class DamSegmentSkeletonDataset(Dataset):
                 ),
             ], p=0.5),
             A.GaussNoise(p=0.2),
-        ], additional_targets={"skeleton": "mask"})
+        ], additional_targets={"dt_target": "mask", "crack_mask": "mask"})
 
     def __len__(self) -> int:
         return len(self.pairs)
@@ -95,21 +95,26 @@ class DamSegmentSkeletonDataset(Dataset):
         else:
             mask = mask_raw.astype(np.uint8)
 
-        # Generate skeleton from crack class (with morphological pre/post processing)
+        # Generate DT target from crack class
         crack_binary = (mask == 1).astype(np.uint8)
-        skel = mask_to_skeleton(crack_binary).astype(np.uint8)
+        dt_target = mask_to_dt_target(crack_binary)
 
         if self._transform is not None:
-            transformed = self._transform(image=img, mask=mask, skeleton=skel)
+            transformed = self._transform(
+                image=img, mask=mask,
+                dt_target=dt_target, crack_mask=crack_binary,
+            )
             img = transformed["image"]
             mask = transformed["mask"]
-            skel = transformed["skeleton"]
+            dt_target = transformed["dt_target"]
+            crack_binary = transformed["crack_mask"]
 
         img_t = torch.from_numpy(img).permute(2, 0, 1).float() / 255.0
         mask_t = torch.from_numpy(mask.copy()).long()
-        skel_t = torch.from_numpy(skel.copy()).float().unsqueeze(0)  # (1, H, W)
+        dt_t = torch.from_numpy(dt_target.copy()).float().unsqueeze(0)  # (1, H, W)
+        crack_t = torch.from_numpy(crack_binary.copy()).float().unsqueeze(0)  # (1, H, W)
 
-        return {"image": img_t, "mask": mask_t, "skeleton": skel_t}
+        return {"image": img_t, "mask": mask_t, "dt_target": dt_t, "crack_mask": crack_t}
 
 
 # ---------------------------------------------------------------------------
@@ -117,7 +122,7 @@ class DamSegmentSkeletonDataset(Dataset):
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="B2 training: B0 + skeleton head")
+    parser = argparse.ArgumentParser(description="B2 training: B0 + skeleton DT regression")
     parser.add_argument("--data-root", type=Path, default=Path("data/raw"))
     parser.add_argument("--output", type=Path, default=Path("runs/B2"))
     parser.add_argument("--epochs", type=int, default=100)
@@ -131,10 +136,8 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--amp", action="store_true", default=True)
-    # Skeleton loss config
+    # Skeleton DT loss config
     parser.add_argument("--skel-weight", type=float, default=0.3)
-    parser.add_argument("--skel-pos-weight", type=float, default=50.0)
-    parser.add_argument("--skel-dice-weight", type=float, default=0.2)
     args = parser.parse_args()
 
     set_seed(args.seed)
@@ -154,12 +157,12 @@ def main() -> None:
     print(f"Data: {len(all_pairs)} total, {len(train_pairs)} train, {len(val_pairs)} val")
 
     train_loader = DataLoader(
-        DamSegmentSkeletonDataset(train_pairs, augment=True),
+        DamSegmentDTDataset(train_pairs, augment=True),
         batch_size=args.batch_size, shuffle=True,
         num_workers=args.num_workers, pin_memory=True, drop_last=True,
     )
     val_loader = DataLoader(
-        DamSegmentSkeletonDataset(val_pairs, augment=False),
+        DamSegmentDTDataset(val_pairs, augment=False),
         batch_size=args.batch_size, shuffle=False,
         num_workers=args.num_workers, pin_memory=True,
     )
@@ -192,13 +195,9 @@ def main() -> None:
         class_weights=DEFAULT_CE_WEIGHTS, ignore_index=255,
     ).to(device)
 
-    skel_loss_fn = BinaryHeadLoss(
-        pos_weight=args.skel_pos_weight,
-        dice_weight=args.skel_dice_weight,
-    ).to(device)
+    skel_loss_fn = DTRegressionLoss().to(device)
 
-    print(f"\nSkeleton loss: weight={args.skel_weight}, "
-          f"pos_weight={args.skel_pos_weight}, dice_weight={args.skel_dice_weight}")
+    print(f"\nSkeleton DT loss: weight={args.skel_weight}")
 
     # ── AMP ──
     scaler = torch.amp.GradScaler("cuda", enabled=args.amp and device.type == "cuda")
@@ -226,12 +225,14 @@ def main() -> None:
         for batch in train_loader:
             images = batch["image"].to(device)
             masks = batch["mask"].to(device)
-            skeletons = batch["skeleton"].to(device)
+            dt_targets = batch["dt_target"].to(device)
+            crack_masks = batch["crack_mask"].to(device)
 
             with torch.amp.autocast("cuda", enabled=args.amp and device.type == "cuda"):
                 outputs = model(images)
                 seg_loss = seg_loss_fn(outputs["seg"], masks)["total"]
-                skel_loss = skel_loss_fn(outputs["skeleton"], skeletons)
+                skel_pred = torch.sigmoid(outputs["skeleton"])
+                skel_loss = skel_loss_fn(skel_pred, dt_targets, crack_masks)
                 total_loss = seg_loss + args.skel_weight * skel_loss
 
             optimizer.zero_grad()
@@ -335,7 +336,7 @@ def main() -> None:
     # ── Summary ──
     summary = {
         "baseline": "B2",
-        "description": "B0 + skeleton head (explicit morphology supervision)",
+        "description": "B0 + skeleton DT regression (SmoothL1, masked to crack)",
         "best_miou_fg": best_miou_fg,
         "b0_miou_fg": 0.673,
         "b1a_miou_fg": 0.657,
@@ -346,8 +347,8 @@ def main() -> None:
         "total_params": param_counts["total"],
         "skeleton_config": {
             "weight": args.skel_weight,
-            "pos_weight": args.skel_pos_weight,
-            "dice_weight": args.skel_dice_weight,
+            "loss": "DTRegressionLoss (SmoothL1)",
+            "target": "normalized_distance_transform",
         },
         "train_samples": len(train_pairs),
         "val_samples": len(val_pairs),
