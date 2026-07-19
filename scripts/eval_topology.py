@@ -159,6 +159,7 @@ def analyze_skeleton_quality(
         total_px = mask.size
         crack_pixel_fractions.append(crack_px / total_px)
 
+        # Thick skeleton (dilated) for coverage/fragmentation/density
         skel = mask_to_skeleton(crack)
         skel_px = skel.sum()
         if skel_px == 0:
@@ -166,20 +167,23 @@ def analyze_skeleton_quality(
 
         skeleton_pixel_fractions.append(skel_px / total_px)
 
-        # Neighbor count for spur detection
+        # Thin skeleton (no dilation) for spur ratio analysis
+        skel_thin = mask_to_skeleton(crack, dilate_radius=0)
+        thin_px = skel_thin.sum()
+
+        # Neighbor count for spur detection (on thin skeleton)
         kernel = np.ones((3, 3), dtype=np.uint8)
         kernel[1, 1] = 0
-        counts = ndimage.convolve(skel.astype(np.uint8), kernel, mode="constant", cval=0)
-        counts = counts * skel.astype(np.uint8)
+        counts = ndimage.convolve(skel_thin.astype(np.uint8), kernel, mode="constant", cval=0)
+        counts = counts * skel_thin.astype(np.uint8)
 
         # Endpoints (1 neighbor) and their connected short branches
         endpoints = (counts == 1).sum()
-        junctions = (counts >= 3).sum()
 
-        # Spur ratio: endpoints / total skeleton pixels (high = many short branches)
-        spur_ratios.append(endpoints / skel_px if skel_px > 0 else 0)
+        # Spur ratio: endpoints / total thin skeleton pixels
+        spur_ratios.append(endpoints / thin_px if thin_px > 0 else 0)
 
-        # Coverage: what fraction of crack area is within 2px of skeleton
+        # Coverage: what fraction of crack area is within 2px of thick skeleton
         if skel.any():
             dt_skel = ndimage.distance_transform_edt(~skel)
             covered = (dt_skel[crack.astype(bool)] <= 2).mean()
