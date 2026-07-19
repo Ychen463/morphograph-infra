@@ -44,17 +44,16 @@ class CrackGraph:
 
 def mask_to_skeleton(
     binary_mask: np.ndarray,
-    closing_radius: int = 3,
-    min_component_px: int = 20,
-    spur_length: int = 8,
+    closing_radius: int = 1,
+    min_component_px: int = 10,
+    spur_length: int = 3,
 ) -> np.ndarray:
     """Skeletonize a binary crack mask with pre/post processing.
 
-    Pre-processing: morphological closing to bridge narrow gaps and reduce
-    fragmentation, then opening to remove tiny noise blobs.
+    Pre-processing: gentle morphological closing to bridge 1-2px gaps
+    and reduce fragmentation without distorting crack shape.
 
-    Post-processing: remove small connected components and prune short spurs
-    to produce a clean, high-coverage skeleton.
+    Post-processing: remove tiny connected components and very short spurs.
 
     Args:
         binary_mask: HxW boolean or uint8 array (nonzero = crack).
@@ -69,16 +68,14 @@ def mask_to_skeleton(
     if not mask.any():
         return mask
 
-    # Pre-processing: close gaps, then remove small noise
+    # Pre-processing: gentle closing to bridge small gaps
     if closing_radius > 0:
-        selem = disk(closing_radius)
-        mask = binary_closing(mask, selem)
-        mask = binary_opening(mask, disk(1))
+        mask = binary_closing(mask, disk(closing_radius))
 
     # Skeletonize
     skel = skeletonize(mask)
 
-    # Post-processing: remove small connected components
+    # Post-processing: remove tiny connected components
     if min_component_px > 0:
         labeled, n_comp = ndimage.label(skel)
         if n_comp > 0:
@@ -87,7 +84,7 @@ def mask_to_skeleton(
                 if size < min_component_px:
                     skel[labeled == i] = False
 
-    # Post-processing: iterative spur pruning
+    # Post-processing: light spur pruning (only very short tips)
     if spur_length > 0:
         skel = _prune_spurs(skel, spur_length)
 
