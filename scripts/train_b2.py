@@ -133,7 +133,7 @@ def main() -> None:
     parser.add_argument("--amp", action="store_true", default=True)
     # Skeleton loss config
     parser.add_argument("--skel-weight", type=float, default=0.3)
-    parser.add_argument("--skel-pos-weight", type=float, default=200.0)
+    parser.add_argument("--skel-pos-weight", type=float, default=50.0)
     parser.add_argument("--skel-dice-weight", type=float, default=0.2)
     args = parser.parse_args()
 

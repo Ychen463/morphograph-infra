@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from scipy import ndimage
 from scipy.spatial.distance import cdist
-from skimage.morphology import skeletonize, disk, binary_closing, binary_opening
+from skimage.morphology import skeletonize, disk, closing, binary_dilation
 
 
 @dataclass
@@ -47,30 +47,41 @@ def mask_to_skeleton(
     closing_radius: int = 1,
     min_component_px: int = 10,
     spur_length: int = 3,
+    dilate_radius: int = 2,
 ) -> np.ndarray:
     """Skeletonize a binary crack mask with pre/post processing.
 
-    Pre-processing: gentle morphological closing to bridge 1-2px gaps
-    and reduce fragmentation without distorting crack shape.
-
-    Post-processing: remove tiny connected components and very short spurs.
+    Pipeline:
+        1. Fill internal holes (prevents ring artifacts)
+        2. Gentle morphological closing (bridges 1-2px gaps)
+        3. Skeletonize (standard thinning)
+        4. Remove tiny connected components
+        5. Prune short spurs
+        6. Dilate skeleton to create thick centerline band
+        7. Clip to original mask boundary
 
     Args:
         binary_mask: HxW boolean or uint8 array (nonzero = crack).
         closing_radius: disk radius for morphological closing (bridges gaps).
         min_component_px: remove skeleton components smaller than this.
         spur_length: prune endpoint branches shorter than this many pixels.
+        dilate_radius: radius for dilation of skeleton (0 = no dilation).
 
     Returns:
-        HxW boolean skeleton.
+        HxW boolean skeleton (thick if dilate_radius > 0).
     """
     mask = binary_mask.astype(bool)
     if not mask.any():
         return mask
 
+    original_mask = mask.copy()
+
+    # Pre-processing: fill internal holes to prevent ring artifacts
+    mask = ndimage.binary_fill_holes(mask)
+
     # Pre-processing: gentle closing to bridge small gaps
     if closing_radius > 0:
-        mask = binary_closing(mask, disk(closing_radius))
+        mask = closing(mask, disk(closing_radius)) > 0
 
     # Skeletonize
     skel = skeletonize(mask)
@@ -87,6 +98,12 @@ def mask_to_skeleton(
     # Post-processing: light spur pruning (only very short tips)
     if spur_length > 0:
         skel = _prune_spurs(skel, spur_length)
+
+    # Post-processing: dilate skeleton for thicker supervision target
+    if dilate_radius > 0:
+        skel = binary_dilation(skel, disk(dilate_radius))
+        # Clip to original mask boundary
+        skel = skel & original_mask
 
     return skel
 
@@ -394,7 +411,7 @@ def mask_to_graph(
     Returns:
         CrackGraph instance with edges, paths, and width estimates.
     """
-    skeleton = mask_to_skeleton(binary_mask)
+    skeleton = mask_to_skeleton(binary_mask, dilate_radius=0)
     endpoints, junctions = detect_keypoints(skeleton)
     return build_graph(
         skeleton, endpoints, junctions,
