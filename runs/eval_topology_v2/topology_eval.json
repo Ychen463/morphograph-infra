@@ -1,0 +1,52 @@
+{
+  "val_samples": 225,
+  "skeleton_quality": {
+    "num_analyzed": 45,
+    "avg_crack_pixel_fraction": 0.023057386610243057,
+    "avg_skeleton_pixel_fraction": 0.0002783639090401786,
+    "avg_spur_ratio": 0.18579117827727076,
+    "avg_coverage": 0.057285200636002086,
+    "avg_fragmentation": 2.0528571428571425,
+    "median_fragmentation": 1.0
+  },
+  "skeleton_issues": [
+    "High spur ratio (0.19) \u2014 many false short branches in skeleton targets",
+    "Low coverage (0.06) \u2014 skeleton doesn't represent crack well",
+    "High fragmentation (2.1x) \u2014 skeleton has more components than crack mask",
+    "Extremely sparse skeleton (0.00028) \u2014 very weak supervision signal"
+  ],
+  "results": {
+    "B0": {
+      "iou_crack": {
+        "mean": 0.5311791663003209,
+        "std": 0.16163305477043835,
+        "median": 0.5470750089720379
+      },
+      "iou_spalling": {
+        "mean": 0.15802601484159637,
+        "std": 0.3321643370620752,
+        "median": 0.0
+      },
+      "miou_fg": {
+        "mean": 0.3446025905709586,
+        "std": 0.1697232889478822,
+        "median": 0.29382470119506093
+      },
+      "cldice_crack": {
+        "mean": 0.8031147212852208,
+        "std": 0.1805365145081223,
+        "median": 0.8364079875341798
+      },
+      "connr_crack": {
+        "mean": 0.8522790174611037,
+        "std": 0.1997143630360266,
+        "median": 0.9090909090909091
+      },
+      "bf1_crack": {
+        "mean": 0.6091261498070917,
+        "std": 0.1654314541657038,
+        "median": 0.6304789751980769
+      }
+    }
+  }
+}
