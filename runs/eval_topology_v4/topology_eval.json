@@ -1,0 +1,50 @@
+{
+  "val_samples": 225,
+  "skeleton_quality": {
+    "num_analyzed": 45,
+    "avg_crack_pixel_fraction": 0.023057386610243057,
+    "avg_skeleton_pixel_fraction": 0.0030474108318949856,
+    "avg_spur_ratio": 7.501875468867217e-05,
+    "avg_coverage": 0.22985978971265678,
+    "avg_fragmentation": 3.059302325581395,
+    "median_fragmentation": 2.5
+  },
+  "skeleton_issues": [
+    "Low coverage (0.23) \u2014 skeleton doesn't represent crack well",
+    "High fragmentation (3.1x) \u2014 skeleton has more components than crack mask"
+  ],
+  "results": {
+    "B0": {
+      "iou_crack": {
+        "mean": 0.5311791663003209,
+        "std": 0.16163305477043835,
+        "median": 0.5470750089720379
+      },
+      "iou_spalling": {
+        "mean": 0.15802601484159637,
+        "std": 0.3321643370620752,
+        "median": 0.0
+      },
+      "miou_fg": {
+        "mean": 0.3446025905709586,
+        "std": 0.1697232889478822,
+        "median": 0.29382470119506093
+      },
+      "cldice_crack": {
+        "mean": 0.8031147212852208,
+        "std": 0.1805365145081223,
+        "median": 0.8364079875341798
+      },
+      "connr_crack": {
+        "mean": 0.8522790174611037,
+        "std": 0.1997143630360266,
+        "median": 0.9090909090909091
+      },
+      "bf1_crack": {
+        "mean": 0.6091261498070917,
+        "std": 0.1654314541657038,
+        "median": 0.6304789751980769
+      }
+    }
+  }
+}
