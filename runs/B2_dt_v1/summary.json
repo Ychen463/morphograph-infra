@@ -1,0 +1,20 @@
+{
+  "baseline": "B2",
+  "description": "B0 + skeleton DT regression (SmoothL1, masked to crack)",
+  "best_miou_fg": 0.6597057115550118,
+  "b0_miou_fg": 0.673,
+  "b1a_miou_fg": 0.657,
+  "delta_vs_b0": -0.013294288444988256,
+  "delta_vs_b1a": 0.0027057115550117583,
+  "final_val_loss": 0.3615455558164078,
+  "epochs": 100,
+  "total_params": 27232900,
+  "skeleton_config": {
+    "weight": 0.3,
+    "loss": "DTRegressionLoss (SmoothL1)",
+    "target": "normalized_distance_transform"
+  },
+  "train_samples": 1275,
+  "val_samples": 225,
+  "seed": 42
+}
