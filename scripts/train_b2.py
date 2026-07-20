@@ -3,10 +3,15 @@
 Usage:
     python scripts/train_b2.py --data-root data/raw --output runs/B2
 
-B2 adds a skeleton prediction head with DT regression (SmoothL1) loss.
+    # Wave 1 variants:
+    python scripts/train_b2.py --data-root data/raw --output runs/B2_dt_v2 --skel-weight 5.0
+    python scripts/train_b2.py --data-root data/raw --output runs/B2_dt_v3 --skel-weight 5.0 --skel-loss-type mse
+    python scripts/train_b2.py --data-root data/raw --output runs/B2_dt_v4 --skel-weight 1.0 --skel-loss-type mse --skel-unmask
+
+B2 adds a skeleton prediction head with DT regression loss.
 Target is normalized distance transform of crack mask (centerline=1.0,
-boundary=0.0), masked to crack pixels only. Same training budget as
-B0/B1a (100 epochs).
+boundary=0.0). Supports masked (crack-only) or unmasked (all pixels)
+supervision, SmoothL1 or MSE loss, and scheduled weight ramp-up.
 """
 
 from __future__ import annotations
@@ -27,7 +32,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from morphograph.data.schema import decode_rgb_mask, NUM_CLASSES, DEFAULT_CE_WEIGHTS
 from morphograph.data.graph_targets import mask_to_dt_target
-from morphograph.losses.composite import WeightedCEDiceLoss, DTRegressionLoss
+from morphograph.losses.composite import WeightedCEDiceLoss, DTRegressionLoss, LossSchedule
 from morphograph.models.morphograph_net import MorphoAuxNet, BASELINE_HEADS
 from morphograph.training.utils import (
     set_seed, discover_all_samples, split_data,
@@ -138,6 +143,13 @@ def main() -> None:
     parser.add_argument("--amp", action="store_true", default=True)
     # Skeleton DT loss config
     parser.add_argument("--skel-weight", type=float, default=0.3)
+    parser.add_argument("--skel-loss-type", choices=["smooth_l1", "mse"], default="smooth_l1")
+    parser.add_argument("--skel-unmask", action="store_true",
+                        help="Supervise all pixels (non-crack→0, crack→DT) instead of crack-only")
+    parser.add_argument("--skel-start-epoch", type=int, default=0,
+                        help="Epoch to start skeleton loss (0 = from beginning)")
+    parser.add_argument("--skel-ramp-epochs", type=int, default=0,
+                        help="Epochs to linearly ramp skeleton loss weight")
     args = parser.parse_args()
 
     set_seed(args.seed)
@@ -195,9 +207,16 @@ def main() -> None:
         class_weights=DEFAULT_CE_WEIGHTS, ignore_index=255,
     ).to(device)
 
-    skel_loss_fn = DTRegressionLoss().to(device)
+    skel_loss_fn = DTRegressionLoss(loss_type=args.skel_loss_type).to(device)
 
-    print(f"\nSkeleton DT loss: weight={args.skel_weight}")
+    skel_schedule = LossSchedule(
+        weight=args.skel_weight,
+        start_epoch=args.skel_start_epoch,
+        ramp_epochs=args.skel_ramp_epochs,
+    )
+
+    print(f"\nSkeleton DT loss: weight={args.skel_weight}, type={args.skel_loss_type}, "
+          f"unmask={args.skel_unmask}, start={args.skel_start_epoch}, ramp={args.skel_ramp_epochs}")
 
     # ── AMP ──
     scaler = torch.amp.GradScaler("cuda", enabled=args.amp and device.type == "cuda")
@@ -232,8 +251,10 @@ def main() -> None:
                 outputs = model(images)
                 seg_loss = seg_loss_fn(outputs["seg"], masks)["total"]
                 skel_pred = torch.sigmoid(outputs["skeleton"])
-                skel_loss = skel_loss_fn(skel_pred, dt_targets, crack_masks)
-                total_loss = seg_loss + args.skel_weight * skel_loss
+                skel_mask = torch.ones_like(crack_masks) if args.skel_unmask else crack_masks
+                skel_loss = skel_loss_fn(skel_pred, dt_targets, skel_mask)
+                skel_w = skel_schedule.effective_weight(epoch)
+                total_loss = seg_loss + skel_w * skel_loss
 
             optimizer.zero_grad()
             scaler.scale(total_loss).backward()
@@ -336,7 +357,7 @@ def main() -> None:
     # ── Summary ──
     summary = {
         "baseline": "B2",
-        "description": "B0 + skeleton DT regression (SmoothL1, masked to crack)",
+        "description": f"B0 + skeleton DT regression ({args.skel_loss_type}, {'unmasked' if args.skel_unmask else 'crack-masked'})",
         "best_miou_fg": best_miou_fg,
         "b0_miou_fg": 0.673,
         "b1a_miou_fg": 0.657,
@@ -347,7 +368,10 @@ def main() -> None:
         "total_params": param_counts["total"],
         "skeleton_config": {
             "weight": args.skel_weight,
-            "loss": "DTRegressionLoss (SmoothL1)",
+            "loss_type": args.skel_loss_type,
+            "unmasked": args.skel_unmask,
+            "start_epoch": args.skel_start_epoch,
+            "ramp_epochs": args.skel_ramp_epochs,
             "target": "normalized_distance_transform",
         },
         "train_samples": len(train_pairs),

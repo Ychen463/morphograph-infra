@@ -328,18 +328,31 @@ class TverskyLoss(nn.Module):
 # ---------------------------------------------------------------------------
 
 class DTRegressionLoss(nn.Module):
-    """SmoothL1 loss for distance transform regression, masked to crack pixels."""
+    """Regression loss for distance transform, masked to crack pixels.
+
+    Args:
+        loss_type: "smooth_l1" or "mse". MSE gives ~2x stronger gradient
+            than SmoothL1 when |error| < 1 (always true for [0,1] targets).
+    """
+
+    def __init__(self, loss_type: str = "smooth_l1") -> None:
+        super().__init__()
+        if loss_type not in ("smooth_l1", "mse"):
+            raise ValueError(f"Unknown loss_type: {loss_type}")
+        self.loss_type = loss_type
 
     def forward(self, pred: torch.Tensor, target: torch.Tensor,
                 mask: torch.Tensor) -> torch.Tensor:
         """
         pred: (B, 1, H, W) sigmoid output [0,1]
         target: (B, 1, H, W) normalized DT [0,1]
-        mask: (B, 1, H, W) crack pixel mask
+        mask: (B, 1, H, W) crack pixel mask (or all-ones for unmasked)
         """
         valid = mask.bool()
         if not valid.any():
             return torch.tensor(0.0, device=pred.device, requires_grad=True)
+        if self.loss_type == "mse":
+            return F.mse_loss(pred[valid], target[valid])
         return F.smooth_l1_loss(pred[valid], target[valid])
 
 
