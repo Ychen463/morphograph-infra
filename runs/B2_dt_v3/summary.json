@@ -1,12 +1,12 @@
 {
   "baseline": "B2",
   "description": "B0 + skeleton DT regression (smooth_l1, crack-masked)",
-  "best_miou_fg": 0.6698383819727805,
+  "best_miou_fg": 0.6529344227309499,
   "b0_miou_fg": 0.673,
   "b1a_miou_fg": 0.657,
-  "delta_vs_b0": -0.0031616180272195926,
-  "delta_vs_b1a": 0.012838381972780422,
-  "final_val_loss": 0.35515652217885907,
+  "delta_vs_b0": -0.020065577269050117,
+  "delta_vs_b1a": -0.004065577269050102,
+  "final_val_loss": 0.36639786302520516,
   "epochs": 100,
   "total_params": 27232900,
   "skeleton_config": {
