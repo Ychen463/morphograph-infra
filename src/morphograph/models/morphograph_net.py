@@ -193,6 +193,31 @@ class SkeletonHead(nn.Module):
         return self.head(fpn_features)
 
 
+class SkeletonHeadDeep(nn.Module):
+    """Deeper skeleton head for DT regression (Wave 2 v6).
+
+    256→128→64→1 (~450K params vs 147K for SkeletonHead).
+    Tests whether head capacity is a bottleneck for DT learning.
+
+    Output: (B, 1, H, W) raw logits (no sigmoid).
+    """
+
+    def __init__(self, fpn_dim: int = FPN_DIM) -> None:
+        super().__init__()
+        self.head = nn.Sequential(
+            nn.Conv2d(fpn_dim, fpn_dim // 2, 3, padding=1, bias=False),
+            nn.GroupNorm(16, fpn_dim // 2),
+            nn.GELU(),
+            nn.Conv2d(fpn_dim // 2, fpn_dim // 4, 3, padding=1, bias=False),
+            nn.GroupNorm(16, fpn_dim // 4),
+            nn.GELU(),
+            nn.Conv2d(fpn_dim // 4, 1, 1),
+        )
+
+    def forward(self, fpn_features: torch.Tensor) -> torch.Tensor:
+        return self.head(fpn_features)
+
+
 class KeypointHead(nn.Module):
     """Endpoint or junction heatmap prediction.
 

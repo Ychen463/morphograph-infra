@@ -33,7 +33,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from morphograph.data.schema import decode_rgb_mask, NUM_CLASSES, DEFAULT_CE_WEIGHTS
 from morphograph.data.graph_targets import mask_to_dt_target
 from morphograph.losses.composite import WeightedCEDiceLoss, DTRegressionLoss, LossSchedule
-from morphograph.models.morphograph_net import MorphoAuxNet, BASELINE_HEADS
+from morphograph.models.morphograph_net import MorphoAuxNet, BASELINE_HEADS, SkeletonHeadDeep
 from morphograph.training.utils import (
     set_seed, discover_all_samples, split_data,
     compute_miou, make_cosine_schedule, save_checkpoint,
@@ -150,6 +150,8 @@ def main() -> None:
                         help="Epoch to start skeleton loss (0 = from beginning)")
     parser.add_argument("--skel-ramp-epochs", type=int, default=0,
                         help="Epochs to linearly ramp skeleton loss weight")
+    parser.add_argument("--skel-head-deep", action="store_true",
+                        help="Use deeper skeleton head (256->128->64->1, ~450K params)")
     args = parser.parse_args()
 
     set_seed(args.seed)
@@ -186,6 +188,11 @@ def main() -> None:
         num_classes=NUM_CLASSES,
         heads=BASELINE_HEADS["B2"],
     ).to(device)
+
+    if args.skel_head_deep:
+        from morphograph.models.morphograph_net import FPN_DIM
+        model.skeleton_head = SkeletonHeadDeep(FPN_DIM).to(device)
+        print("Using SkeletonHeadDeep (256->128->64->1)")
 
     param_counts = model.count_parameters()
     print(f"Parameters: {param_counts['total']:,} total")
@@ -372,6 +379,7 @@ def main() -> None:
             "unmasked": args.skel_unmask,
             "start_epoch": args.skel_start_epoch,
             "ramp_epochs": args.skel_ramp_epochs,
+            "head_deep": args.skel_head_deep,
             "target": "normalized_distance_transform",
         },
         "train_samples": len(train_pairs),
