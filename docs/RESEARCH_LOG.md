@@ -113,3 +113,38 @@ Experiment phases, results, and next steps. Each entry is immutable once written
 **Next Steps**: Run B2 (B0 + explicit skeleton head supervision). Direct comparison: implicit topology loss (B1a) vs explicit dense skeleton prediction (B2).
 
 **Status**: completed
+
+---
+
+### P2-B2: B0 + Skeleton DT Regression — 2026-07-19 to 2026-07-23
+
+**Objective**: Add explicit skeleton supervision via distance transform regression. Systematically tune loss type, masking strategy, and weight to beat B0.
+
+**Setup**:
+- Architecture: B0 + SkeletonHead (256→64→1, 147K params), total 27.2M params
+- DT target: normalized distance transform of crack mask (centerline=1.0, boundary=0.0)
+- Skeleton head output: sigmoid → [0,1], regression loss masked to crack pixels (or unmasked)
+- All other hyperparameters identical to B0 (100 epochs, same LR, same data split)
+
+**Experiment Matrix**:
+
+| Run | Loss | Weight | Masking | mIoU_fg | Delta vs B0 |
+|-----|------|--------|---------|---------|-------------|
+| v1 | SmoothL1 | 0.3 | crack-only | 0.660 | -1.3% |
+| v2 | SmoothL1 | 5.0 | crack-only | 0.660 | -1.3% |
+| v3 | MSE | 5.0 | crack-only | 0.672 | -0.09% |
+| v3_w8 | MSE | 8.0 | crack-only | 0.667 | -0.55% |
+| v3_w12 | MSE | 12.0 | crack-only | 0.672 | -0.09% |
+| v4 | MSE | 1.0 | unmasked | 0.667 | -0.58% |
+| v4_w5 | MSE | 5.0 | unmasked | 0.670 | -0.33% |
+| **v4_w10** | **MSE** | **10.0** | **unmasked** | **0.683** | **+0.99%** |
+
+**Observations**:
+- SmoothL1 fundamentally limited: gradient halved when |error|<1 (always true for [0,1] targets). Weight tuning cannot fix this.
+- MSE + crack-only masking: ceiling at ~0.672 regardless of weight (5/8/12). 2.2% pixel coverage is the bottleneck.
+- MSE + unmasked: weight is critical. w=1.0 causes trivial solution (head outputs ~0 everywhere since 96.6% pixels have target=0). w=10.0 overcomes this — high weight forces the head to fit crack DT values, breaking the trivial solution. **First config to beat B0.**
+- Key insight: unmasked supervision changes the task semantics — head learns "is this a crack pixel? if so, how central?" This provides implicit crack detection supervision on ALL pixels.
+
+**Next Steps**: Continue weight search around v4 unmasked (w=8/15/20) to find optimal. Then test v5 (schedule) and v6 (deeper head) on best config.
+
+**Status**: in-progress
