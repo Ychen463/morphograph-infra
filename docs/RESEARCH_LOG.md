@@ -138,13 +138,21 @@ Experiment phases, results, and next steps. Each entry is immutable once written
 | v4 | MSE | 1.0 | unmasked | 0.667 | -0.58% |
 | v4_w5 | MSE | 5.0 | unmasked | 0.670 | -0.33% |
 | **v4_w10** | **MSE** | **10.0** | **unmasked** | **0.683** | **+0.99%** |
+| v4_w8 | MSE | 8.0 | unmasked | 0.666 | -0.67% |
+| v4_w15 | MSE | 15.0 | unmasked | 0.676 | +0.27% |
+| v4_w20 | MSE | 20.0 | unmasked | 0.660 | -1.28% |
 
 **Observations**:
 - SmoothL1 fundamentally limited: gradient halved when |error|<1 (always true for [0,1] targets). Weight tuning cannot fix this.
 - MSE + crack-only masking: ceiling at ~0.672 regardless of weight (5/8/12). 2.2% pixel coverage is the bottleneck.
-- MSE + unmasked: weight is critical. w=1.0 causes trivial solution (head outputs ~0 everywhere since 96.6% pixels have target=0). w=10.0 overcomes this — high weight forces the head to fit crack DT values, breaking the trivial solution. **First config to beat B0.**
+- MSE + unmasked weight curve is inverted-U shaped with clear peak at w=10:
+  - w<10: insufficient signal, trivial solution residual (head biased toward outputting 0)
+  - w=10: optimal balance, skel loss forces crack DT learning without overwhelming seg
+  - w>10: skel loss dominates, interferes with segmentation (w=20 regresses to v1 level)
 - Key insight: unmasked supervision changes the task semantics — head learns "is this a crack pixel? if so, how central?" This provides implicit crack detection supervision on ALL pixels.
 
-**Next Steps**: Continue weight search around v4 unmasked (w=8/15/20) to find optimal. Then test v5 (schedule) and v6 (deeper head) on best config.
+**Best config**: MSE, unmasked, w=10.0 → mIoU_fg=0.683 (+1.0% vs B0)
+
+**Next Steps**: Test v5 (delayed start schedule) and v6 (deeper head) on v4_w10 base config.
 
 **Status**: in-progress
