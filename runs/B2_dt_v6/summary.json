@@ -1,0 +1,24 @@
+{
+  "baseline": "B2",
+  "description": "B0 + skeleton DT regression (mse, unmasked)",
+  "best_miou_fg": 0.666182082312343,
+  "b0_miou_fg": 0.673,
+  "b1a_miou_fg": 0.657,
+  "delta_vs_b0": -0.006817917687657049,
+  "delta_vs_b1a": 0.009182082312342965,
+  "final_val_loss": 0.35422569552534505,
+  "epochs": 100,
+  "total_params": 27454340,
+  "skeleton_config": {
+    "weight": 10.0,
+    "loss_type": "mse",
+    "unmasked": true,
+    "start_epoch": 0,
+    "ramp_epochs": 0,
+    "head_deep": true,
+    "target": "normalized_distance_transform"
+  },
+  "train_samples": 1275,
+  "val_samples": 225,
+  "seed": 42
+}
