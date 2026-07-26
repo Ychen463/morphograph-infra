@@ -206,15 +206,15 @@ def main() -> None:
     parser.add_argument("--skel-weight", type=float, default=10.0)
     parser.add_argument("--skel-loss-type", choices=["smooth_l1", "mse"], default="mse")
     parser.add_argument("--skel-unmask", action="store_true", default=True)
-    # B3: keypoint weights (P0 overfit test: pos_weight=200-500, dice_weight=0.2)
-    parser.add_argument("--ep-weight", type=float, default=2.0)
-    parser.add_argument("--ep-pos-weight", type=float, default=500.0)
-    parser.add_argument("--jn-weight", type=float, default=2.0)
-    parser.add_argument("--jn-pos-weight", type=float, default=200.0)
+    # B3: keypoint weights
+    parser.add_argument("--ep-weight", type=float, default=0.3)
+    parser.add_argument("--ep-pos-weight", type=float, default=200.0)
+    parser.add_argument("--jn-weight", type=float, default=0.3)
+    parser.add_argument("--jn-pos-weight", type=float, default=100.0)
     parser.add_argument("--kp-dice-weight", type=float, default=0.2,
-                        help="Dice weight for keypoint BinaryHeadLoss (P0: 0.2)")
+                        help="Dice weight for keypoint BinaryHeadLoss")
     # B5: width regression weight
-    parser.add_argument("--width-weight", type=float, default=2.0)
+    parser.add_argument("--width-weight", type=float, default=0.5)
     args = parser.parse_args()
 
     set_seed(args.seed)
