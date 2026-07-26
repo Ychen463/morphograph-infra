@@ -1,15 +1,15 @@
-"""B3-B5 training: progressive graph supervision ladder.
+"""B3/B5 training: progressive graph supervision ladder.
 
 Usage:
     python scripts/train_b345.py --baseline B3 --data-root data/raw --output runs/B3
-    python scripts/train_b345.py --baseline B4 --data-root data/raw --output runs/B4
     python scripts/train_b345.py --baseline B5 --data-root data/raw --output runs/B5
 
 B3 = B2_best + endpoint/junction heatmap heads
-B4 = B3 + edge path connectivity loss
-B5 = B4 + width regression head
+B5 = B3 + width regression head
+(B4 edge connectivity skipped — conflicts with DT regression on same head)
 
 B2 skeleton config inherits v4_w10 best: MSE, unmasked, weight=10.0.
+Keypoint params from P0 overfit test: pos_weight=200-500, dice_weight=0.2.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from morphograph.data.schema import decode_rgb_mask, NUM_CLASSES, DEFAULT_CE_WEIGHTS
 from morphograph.data.graph_targets import (
     mask_to_dt_target, mask_to_skeleton, detect_keypoints,
-    build_graph, estimate_width,
+    estimate_width,
 )
 from morphograph.losses.composite import (
     WeightedCEDiceLoss, DTRegressionLoss, BinaryHeadLoss, WidthRegressionLoss,
@@ -59,24 +59,6 @@ def _make_gaussian_heatmap(
         heatmap = ndi.gaussian_filter(heatmap, sigma=sigma)
         heatmap = heatmap / (heatmap.max() + 1e-8)  # normalize to [0, 1]
     return heatmap
-
-
-def _make_edge_map(
-    binary_mask: np.ndarray, skeleton: np.ndarray,
-    endpoints: np.ndarray, junctions: np.ndarray,
-) -> np.ndarray:
-    """Create binary edge map from traced graph branches."""
-    graph = build_graph(
-        skeleton, endpoints, junctions,
-        min_branch_length=5, junction_merge_radius=5,
-        binary_mask=binary_mask,
-    )
-    edge_map = np.zeros_like(skeleton, dtype=np.float32)
-    for path in graph.edge_paths:
-        for r, c in path:
-            if 0 <= r < edge_map.shape[0] and 0 <= c < edge_map.shape[1]:
-                edge_map[int(r), int(c)] = 1.0
-    return edge_map
 
 
 # ---------------------------------------------------------------------------
@@ -107,8 +89,6 @@ class DamSegmentGraphDataset(Dataset):
             "dt_target": "mask", "crack_mask": "mask",
             "ep_heatmap": "mask", "jn_heatmap": "mask",
         }
-        if self.baseline in ("B4", "B5"):
-            extra_targets["edge_map"] = "mask"
         if self.baseline == "B5":
             extra_targets["width_map"] = "mask"
             extra_targets["skel_mask"] = "mask"
@@ -170,11 +150,6 @@ class DamSegmentGraphDataset(Dataset):
             "jn_heatmap": jn_heatmap,
         }
 
-        # B4 targets: edge map
-        if self.baseline in ("B4", "B5"):
-            edge_map = _make_edge_map(crack_binary, skeleton, endpoints, junctions)
-            result["edge_map"] = edge_map
-
         # B5 targets: width map + skeleton mask
         if self.baseline == "B5":
             width_map = estimate_width(crack_binary, skeleton)
@@ -200,8 +175,6 @@ class DamSegmentGraphDataset(Dataset):
             "ep_heatmap": torch.from_numpy(result["ep_heatmap"].copy()).float().unsqueeze(0),
             "jn_heatmap": torch.from_numpy(result["jn_heatmap"].copy()).float().unsqueeze(0),
         }
-        if "edge_map" in result:
-            out["edge_map"] = torch.from_numpy(result["edge_map"].copy()).float().unsqueeze(0)
         if "width_map" in result:
             out["width_map"] = torch.from_numpy(result["width_map"].copy()).float().unsqueeze(0)
             out["skel_mask"] = torch.from_numpy(result["skel_mask"].copy()).float().unsqueeze(0)
@@ -210,33 +183,12 @@ class DamSegmentGraphDataset(Dataset):
 
 
 # ---------------------------------------------------------------------------
-# Edge connectivity loss (B4)
-# ---------------------------------------------------------------------------
-
-class EdgeConnectivityLoss(torch.nn.Module):
-    """Path recall loss: encourages predicted skeleton to be active along GT edge paths.
-
-    For each GT edge path pixel, we want high skeleton probability.
-    Loss = 1 - mean(sigmoid(skeleton_logits[edge_pixels])).
-    """
-
-    def forward(
-        self, skel_logits: torch.Tensor, edge_map: torch.Tensor,
-    ) -> torch.Tensor:
-        valid = edge_map.bool()
-        if not valid.any():
-            return torch.tensor(0.0, device=skel_logits.device, requires_grad=True)
-        probs = torch.sigmoid(skel_logits[valid])
-        return 1.0 - probs.mean()
-
-
-# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="B3-B5 training")
-    parser.add_argument("--baseline", choices=["B3", "B4", "B5"], required=True)
+    parser.add_argument("--baseline", choices=["B3", "B5"], required=True)
     parser.add_argument("--data-root", type=Path, default=Path("data/raw"))
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--epochs", type=int, default=100)
@@ -254,15 +206,15 @@ def main() -> None:
     parser.add_argument("--skel-weight", type=float, default=10.0)
     parser.add_argument("--skel-loss-type", choices=["smooth_l1", "mse"], default="mse")
     parser.add_argument("--skel-unmask", action="store_true", default=True)
-    # B3: keypoint weights
-    parser.add_argument("--ep-weight", type=float, default=0.5)
-    parser.add_argument("--ep-pos-weight", type=float, default=100.0)
-    parser.add_argument("--jn-weight", type=float, default=0.5)
-    parser.add_argument("--jn-pos-weight", type=float, default=100.0)
-    # B4: edge connectivity weight
-    parser.add_argument("--edge-weight", type=float, default=1.0)
+    # B3: keypoint weights (P0 overfit test: pos_weight=200-500, dice_weight=0.2)
+    parser.add_argument("--ep-weight", type=float, default=2.0)
+    parser.add_argument("--ep-pos-weight", type=float, default=500.0)
+    parser.add_argument("--jn-weight", type=float, default=2.0)
+    parser.add_argument("--jn-pos-weight", type=float, default=200.0)
+    parser.add_argument("--kp-dice-weight", type=float, default=0.2,
+                        help="Dice weight for keypoint BinaryHeadLoss (P0: 0.2)")
     # B5: width regression weight
-    parser.add_argument("--width-weight", type=float, default=0.5)
+    parser.add_argument("--width-weight", type=float, default=2.0)
     args = parser.parse_args()
 
     set_seed(args.seed)
@@ -322,17 +274,15 @@ def main() -> None:
 
     skel_loss_fn = DTRegressionLoss(loss_type=args.skel_loss_type).to(device)
 
-    ep_loss_fn = BinaryHeadLoss(pos_weight=args.ep_pos_weight, dice_weight=0.5).to(device)
-    jn_loss_fn = BinaryHeadLoss(pos_weight=args.jn_pos_weight, dice_weight=0.5).to(device)
+    ep_loss_fn = BinaryHeadLoss(pos_weight=args.ep_pos_weight, dice_weight=args.kp_dice_weight).to(device)
+    jn_loss_fn = BinaryHeadLoss(pos_weight=args.jn_pos_weight, dice_weight=args.kp_dice_weight).to(device)
 
-    edge_loss_fn = EdgeConnectivityLoss().to(device) if args.baseline in ("B4", "B5") else None
     width_loss_fn = WidthRegressionLoss().to(device) if args.baseline == "B5" else None
 
     # Print config
     active_losses = [f"seg", f"skel(w={args.skel_weight})",
-                     f"ep(w={args.ep_weight})", f"jn(w={args.jn_weight})"]
-    if edge_loss_fn:
-        active_losses.append(f"edge(w={args.edge_weight})")
+                     f"ep(w={args.ep_weight},pw={args.ep_pos_weight})",
+                     f"jn(w={args.jn_weight},pw={args.jn_pos_weight})"]
     if width_loss_fn:
         active_losses.append(f"width(w={args.width_weight})")
     print(f"\nLosses: {' + '.join(active_losses)}")
@@ -343,8 +293,6 @@ def main() -> None:
     # ── Training ──
     best_miou_fg = 0.0
     loss_keys = ["train_loss", "train_seg", "train_skel", "train_ep", "train_jn"]
-    if edge_loss_fn:
-        loss_keys.append("train_edge")
     if width_loss_fn:
         loss_keys.append("train_width")
     history = {k: [] for k in loss_keys}
@@ -389,13 +337,6 @@ def main() -> None:
                               + args.ep_weight * ep_loss
                               + args.jn_weight * jn_loss)
 
-                # Edge connectivity loss (B4+)
-                edge_loss_val = torch.tensor(0.0, device=device)
-                if edge_loss_fn is not None:
-                    edge_map = batch["edge_map"].to(device)
-                    edge_loss_val = edge_loss_fn(outputs["skeleton"], edge_map)
-                    total_loss = total_loss + args.edge_weight * edge_loss_val
-
                 # Width regression loss (B5)
                 width_loss_val = torch.tensor(0.0, device=device)
                 if width_loss_fn is not None:
@@ -417,8 +358,6 @@ def main() -> None:
             epoch_losses["train_skel"].append(skel_loss.item())
             epoch_losses["train_ep"].append(ep_loss.item())
             epoch_losses["train_jn"].append(jn_loss.item())
-            if edge_loss_fn:
-                epoch_losses["train_edge"].append(edge_loss_val.item())
             if width_loss_fn:
                 epoch_losses["train_width"].append(width_loss_val.item())
 
@@ -464,8 +403,6 @@ def main() -> None:
         best_marker = " *" if is_best else ""
         loss_str = (f"seg={avgs['train_seg']:.4f} skel={avgs['train_skel']:.4f} "
                     f"ep={avgs['train_ep']:.4f} jn={avgs['train_jn']:.4f}")
-        if edge_loss_fn:
-            loss_str += f" edge={avgs['train_edge']:.4f}"
         if width_loss_fn:
             loss_str += f" width={avgs['train_width']:.4f}"
         print(
@@ -492,8 +429,6 @@ def main() -> None:
         axes[0].plot(history["train_skel"], label="skel")
         axes[0].plot(history["train_ep"], label="ep")
         axes[0].plot(history["train_jn"], label="jn")
-        if "train_edge" in history:
-            axes[0].plot(history["train_edge"], label="edge")
         if "train_width" in history:
             axes[0].plot(history["train_width"], label="width")
         axes[0].plot(history["train_loss"], label="total", linestyle="--")
@@ -541,7 +476,7 @@ def main() -> None:
             "ep_pos_weight": args.ep_pos_weight,
             "jn_weight": args.jn_weight,
             "jn_pos_weight": args.jn_pos_weight,
-            "edge_weight": args.edge_weight if args.baseline in ("B4", "B5") else None,
+            "kp_dice_weight": args.kp_dice_weight,
             "width_weight": args.width_weight if args.baseline == "B5" else None,
         },
         "train_samples": len(train_pairs),
