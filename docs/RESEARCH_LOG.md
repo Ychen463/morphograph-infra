@@ -116,7 +116,7 @@ Experiment phases, results, and next steps. Each entry is immutable once written
 
 ---
 
-### P2-B2: B0 + Skeleton DT Regression — 2026-07-19 to 2026-07-23
+### P2-B2: B0 + Skeleton DT Regression — 2026-07-19 to 2026-07-25
 
 **Objective**: Add explicit skeleton supervision via distance transform regression. Systematically tune loss type, masking strategy, and weight to beat B0.
 
@@ -128,6 +128,8 @@ Experiment phases, results, and next steps. Each entry is immutable once written
 
 **Experiment Matrix**:
 
+Wave 1 — Loss type and masking:
+
 | Run | Loss | Weight | Masking | mIoU_fg | Delta vs B0 |
 |-----|------|--------|---------|---------|-------------|
 | v1 | SmoothL1 | 0.3 | crack-only | 0.660 | -1.3% |
@@ -135,24 +137,39 @@ Experiment phases, results, and next steps. Each entry is immutable once written
 | v3 | MSE | 5.0 | crack-only | 0.672 | -0.09% |
 | v3_w8 | MSE | 8.0 | crack-only | 0.667 | -0.55% |
 | v3_w12 | MSE | 12.0 | crack-only | 0.672 | -0.09% |
-| v4 | MSE | 1.0 | unmasked | 0.667 | -0.58% |
-| v4_w5 | MSE | 5.0 | unmasked | 0.670 | -0.33% |
-| **v4_w10** | **MSE** | **10.0** | **unmasked** | **0.683** | **+0.99%** |
-| v4_w8 | MSE | 8.0 | unmasked | 0.666 | -0.67% |
-| v4_w15 | MSE | 15.0 | unmasked | 0.676 | +0.27% |
-| v4_w20 | MSE | 20.0 | unmasked | 0.660 | -1.28% |
+
+Weight sweep — v4 unmasked MSE:
+
+| Weight | mIoU_fg | Delta vs B0 |
+|--------|---------|-------------|
+| 1.0 | 0.667 | -0.58% |
+| 5.0 | 0.670 | -0.33% |
+| 8.0 | 0.666 | -0.67% |
+| 9.0 | 0.658 | -1.53% |
+| **10.0** | **0.683** | **+0.99%** |
+| 11.0 | 0.665 | -0.79% |
+| 13.0 | 0.662 | -1.10% |
+| 15.0 | 0.676 | +0.27% |
+| 20.0 | 0.660 | -1.28% |
+
+Wave 2 — Schedule and head capacity (base: v4_w10):
+
+| Run | Change | mIoU_fg | Delta vs B0 |
+|-----|--------|---------|-------------|
+| v4_w10 | base | **0.683** | **+0.99%** |
+| v5 | +schedule (start=20, ramp=10) | 0.673 | -0.05% |
+| v6 | +deep head (256→128→64→1, 450K params) | 0.666 | -0.68% |
 
 **Observations**:
 - SmoothL1 fundamentally limited: gradient halved when |error|<1 (always true for [0,1] targets). Weight tuning cannot fix this.
 - MSE + crack-only masking: ceiling at ~0.672 regardless of weight (5/8/12). 2.2% pixel coverage is the bottleneck.
-- MSE + unmasked weight curve is inverted-U shaped with clear peak at w=10:
-  - w<10: insufficient signal, trivial solution residual (head biased toward outputting 0)
-  - w=10: optimal balance, skel loss forces crack DT learning without overwhelming seg
-  - w>10: skel loss dominates, interferes with segmentation (w=20 regresses to v1 level)
+- MSE + unmasked: sharp peak at w=10. w=9 and w=11 both significantly worse, suggesting the +1.0% gain is sensitive to weight and may partly reflect training stochasticity.
+- Schedule (v5) hurts: delaying DT signal loses early co-training benefit.
+- Deeper head (v6) hurts: 450K params overfits sparse DT signal; capacity is not the bottleneck.
 - Key insight: unmasked supervision changes the task semantics — head learns "is this a crack pixel? if so, how central?" This provides implicit crack detection supervision on ALL pixels.
 
 **Best config**: MSE, unmasked, w=10.0 → mIoU_fg=0.683 (+1.0% vs B0)
 
-**Next Steps**: Test v5 (delayed start schedule) and v6 (deeper head) on v4_w10 base config.
+**Next Steps**: Multi-seed validation (seed=42/123/456) on v4_w10 to confirm the +1.0% gain is robust before locking B2 config.
 
 **Status**: in-progress
