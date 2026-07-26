@@ -1,0 +1,25 @@
+{
+  "baseline": "B5",
+  "best_miou_fg": 0.6505389278319662,
+  "b0_miou_fg": 0.673,
+  "b2_best_miou_fg": 0.683,
+  "delta_vs_b0": -0.022461072168033835,
+  "delta_vs_b2": -0.032461072168033844,
+  "final_val_loss": 0.3352047644163433,
+  "epochs": 100,
+  "total_params": 27675847,
+  "config": {
+    "skel_weight": 10.0,
+    "skel_loss_type": "mse",
+    "skel_unmask": true,
+    "ep_weight": 2.0,
+    "ep_pos_weight": 500.0,
+    "jn_weight": 2.0,
+    "jn_pos_weight": 200.0,
+    "kp_dice_weight": 0.2,
+    "width_weight": 2.0
+  },
+  "train_samples": 1275,
+  "val_samples": 225,
+  "seed": 42
+}
