@@ -36,6 +36,7 @@ from morphograph.data.graph_targets import (
 )
 from morphograph.losses.composite import (
     WeightedCEDiceLoss, DTRegressionLoss, BinaryHeadLoss, WidthRegressionLoss,
+    LossSchedule,
 )
 from morphograph.models.morphograph_net import MorphoAuxNet, BASELINE_HEADS
 from morphograph.training.utils import (
@@ -213,8 +214,17 @@ def main() -> None:
     parser.add_argument("--jn-pos-weight", type=float, default=100.0)
     parser.add_argument("--kp-dice-weight", type=float, default=0.2,
                         help="Dice weight for keypoint BinaryHeadLoss")
+    # Schedule: let seg+skel train first, then ramp in auxiliary losses
+    parser.add_argument("--aux-start-epoch", type=int, default=20,
+                        help="Epoch to start ep/jn losses")
+    parser.add_argument("--aux-ramp-epochs", type=int, default=10,
+                        help="Epochs to linearly ramp ep/jn loss weights")
     # B5: width regression weight
     parser.add_argument("--width-weight", type=float, default=0.5)
+    parser.add_argument("--width-start-epoch", type=int, default=30,
+                        help="Epoch to start width loss (after ep/jn ramp)")
+    parser.add_argument("--width-ramp-epochs", type=int, default=10,
+                        help="Epochs to linearly ramp width loss weight")
     args = parser.parse_args()
 
     set_seed(args.seed)
@@ -279,12 +289,29 @@ def main() -> None:
 
     width_loss_fn = WidthRegressionLoss().to(device) if args.baseline == "B5" else None
 
+    # Schedules: auxiliary losses ramp in after seg+skel stabilize
+    ep_schedule = LossSchedule(
+        weight=args.ep_weight,
+        start_epoch=args.aux_start_epoch,
+        ramp_epochs=args.aux_ramp_epochs,
+    )
+    jn_schedule = LossSchedule(
+        weight=args.jn_weight,
+        start_epoch=args.aux_start_epoch,
+        ramp_epochs=args.aux_ramp_epochs,
+    )
+    width_schedule = LossSchedule(
+        weight=args.width_weight,
+        start_epoch=args.width_start_epoch,
+        ramp_epochs=args.width_ramp_epochs,
+    ) if args.baseline == "B5" else None
+
     # Print config
     active_losses = [f"seg", f"skel(w={args.skel_weight})",
-                     f"ep(w={args.ep_weight},pw={args.ep_pos_weight})",
-                     f"jn(w={args.jn_weight},pw={args.jn_pos_weight})"]
+                     f"ep(w={args.ep_weight},start={args.aux_start_epoch},ramp={args.aux_ramp_epochs})",
+                     f"jn(w={args.jn_weight},start={args.aux_start_epoch},ramp={args.aux_ramp_epochs})"]
     if width_loss_fn:
-        active_losses.append(f"width(w={args.width_weight})")
+        active_losses.append(f"width(w={args.width_weight},start={args.width_start_epoch},ramp={args.width_ramp_epochs})")
     print(f"\nLosses: {' + '.join(active_losses)}")
 
     # ── AMP ──
@@ -332,10 +359,12 @@ def main() -> None:
                 ep_loss = ep_loss_fn(outputs["endpoints"], ep_targets)
                 jn_loss = jn_loss_fn(outputs["junctions"], jn_targets)
 
+                ep_w = ep_schedule.effective_weight(epoch)
+                jn_w = jn_schedule.effective_weight(epoch)
                 total_loss = (seg_loss
                               + args.skel_weight * skel_loss
-                              + args.ep_weight * ep_loss
-                              + args.jn_weight * jn_loss)
+                              + ep_w * ep_loss
+                              + jn_w * jn_loss)
 
                 # Width regression loss (B5)
                 width_loss_val = torch.tensor(0.0, device=device)
@@ -343,7 +372,8 @@ def main() -> None:
                     width_map = batch["width_map"].to(device)
                     skel_mask_target = batch["skel_mask"].to(device)
                     width_loss_val = width_loss_fn(outputs["width"], width_map, skel_mask_target)
-                    total_loss = total_loss + args.width_weight * width_loss_val
+                    width_w = width_schedule.effective_weight(epoch)
+                    total_loss = total_loss + width_w * width_loss_val
 
             optimizer.zero_grad()
             scaler.scale(total_loss).backward()
@@ -477,7 +507,11 @@ def main() -> None:
             "jn_weight": args.jn_weight,
             "jn_pos_weight": args.jn_pos_weight,
             "kp_dice_weight": args.kp_dice_weight,
+            "aux_start_epoch": args.aux_start_epoch,
+            "aux_ramp_epochs": args.aux_ramp_epochs,
             "width_weight": args.width_weight if args.baseline == "B5" else None,
+            "width_start_epoch": args.width_start_epoch if args.baseline == "B5" else None,
+            "width_ramp_epochs": args.width_ramp_epochs if args.baseline == "B5" else None,
         },
         "train_samples": len(train_pairs),
         "val_samples": len(val_pairs),
