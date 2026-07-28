@@ -170,7 +170,7 @@ def _sample_path_evidence(
     grid = torch.stack([grid_x, grid_y], dim=-1).view(1, 1, total_pts, 2)
 
     sampled = F.grid_sample(
-        dt_map, grid, mode="bilinear", padding_mode="zeros", align_corners=True
+        dt_map.float(), grid.float(), mode="bilinear", padding_mode="zeros", align_corners=True
     ).view(num_samples, 2 * num_perp + 1)
 
     # Take max across perpendicular direction at each position
