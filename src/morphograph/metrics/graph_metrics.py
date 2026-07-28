@@ -27,6 +27,10 @@ DEFAULT_KEYPOINT_TOLERANCE_PX = 5.0
 DEFAULT_SPUR_THRESHOLD_PX = 10
 
 
+RELAXED_TOLERANCE_PX = 10.0
+LENIENT_TOLERANCE_PX = 15.0
+
+
 @dataclass
 class GraphMetrics:
     """Container for graph evaluation metrics."""
@@ -41,6 +45,16 @@ class GraphMetrics:
     edge_f1: float = 0.0
     width_mae: float = 0.0  # at matched skeleton pixels only
     false_spur_rate: float = 0.0
+    # Relaxed tier (10px) — for development/ablation
+    endpoint_f1_relaxed: float = 0.0
+    junction_f1_relaxed: float = 0.0
+    edge_f1_relaxed: float = 0.0
+    # Lenient tier (15px) — upper bound / sanity check
+    endpoint_f1_lenient: float = 0.0
+    junction_f1_lenient: float = 0.0
+    edge_f1_lenient: float = 0.0
+    # Soft edge matching (partial credit at 15px)
+    edge_f1_soft: float = 0.0
 
 
 def _keypoint_prf(
@@ -82,6 +96,113 @@ def _keypoint_prf(
     return float(precision), float(recall), float(f1)
 
 
+def _edge_prf(
+    pred_nodes: np.ndarray,
+    target_nodes: np.ndarray,
+    pred_edges: list[tuple[int, int]],
+    target_edges: list[tuple[int, int]],
+    tolerance_px: float,
+) -> tuple[float, float, float, int]:
+    """Edge precision, recall, F1 at a given node tolerance.
+
+    Returns (precision, recall, f1, tp_count).
+    """
+    edge_tp = 0
+    if len(pred_nodes) > 0 and len(target_nodes) > 0 and len(pred_edges) > 0:
+        node_dists = cdist(pred_nodes, target_nodes)
+        row_ind, col_ind = linear_sum_assignment(node_dists)
+        pred_to_target = {}
+        for r, c in zip(row_ind, col_ind):
+            if node_dists[r, c] <= tolerance_px:
+                pred_to_target[r] = c
+
+        target_edge_set = set()
+        for a, b in target_edges:
+            target_edge_set.add((min(a, b), max(a, b)))
+
+        for a, b in pred_edges:
+            if a in pred_to_target and b in pred_to_target:
+                mapped = (
+                    min(pred_to_target[a], pred_to_target[b]),
+                    max(pred_to_target[a], pred_to_target[b]),
+                )
+                if mapped in target_edge_set:
+                    edge_tp += 1
+
+    edge_p = edge_tp / max(len(pred_edges), 1)
+    edge_r = edge_tp / max(len(target_edges), 1)
+    edge_f = 2 * edge_p * edge_r / (edge_p + edge_r + 1e-8)
+    return float(edge_p), float(edge_r), float(edge_f), edge_tp
+
+
+def _soft_edge_score(
+    pred_nodes: np.ndarray,
+    target_nodes: np.ndarray,
+    pred_edges: list[tuple[int, int]],
+    target_edges: list[tuple[int, int]],
+    strict_tolerance: float = DEFAULT_KEYPOINT_TOLERANCE_PX,
+    soft_tolerance: float = LENIENT_TOLERANCE_PX,
+) -> tuple[float, float, float]:
+    """Soft edge matching: full credit for strict match, 0.5 for soft match.
+
+    For each predicted edge, if strict match fails, check whether both
+    nodes are within soft_tolerance of ANY pair of GT nodes that share
+    an edge. Award 0.5 partial credit.
+
+    Returns (precision, recall, f1).
+    """
+    if len(pred_edges) == 0 and len(target_edges) == 0:
+        return 1.0, 1.0, 1.0
+    if len(pred_edges) == 0 or len(pred_nodes) == 0:
+        return 0.0, 0.0, 0.0
+    if len(target_edges) == 0 or len(target_nodes) == 0:
+        return 0.0, 0.0, 0.0
+
+    node_dists = cdist(pred_nodes, target_nodes)
+
+    # Strict one-to-one matching
+    row_ind, col_ind = linear_sum_assignment(node_dists)
+    strict_map = {}
+    for r, c in zip(row_ind, col_ind):
+        if node_dists[r, c] <= strict_tolerance:
+            strict_map[r] = c
+
+    target_edge_set = set()
+    for a, b in target_edges:
+        target_edge_set.add((min(a, b), max(a, b)))
+
+    score_sum = 0.0
+    for a, b in pred_edges:
+        # Try strict match first
+        if a in strict_map and b in strict_map:
+            mapped = (
+                min(strict_map[a], strict_map[b]),
+                max(strict_map[a], strict_map[b]),
+            )
+            if mapped in target_edge_set:
+                score_sum += 1.0
+                continue
+
+        # Soft match: check if both pred nodes are near any GT edge's nodes
+        found_soft = False
+        for gt_a, gt_b in target_edges:
+            dist_a_gta = node_dists[a, gt_a] if a < node_dists.shape[0] and gt_a < node_dists.shape[1] else float("inf")
+            dist_b_gtb = node_dists[b, gt_b] if b < node_dists.shape[0] and gt_b < node_dists.shape[1] else float("inf")
+            dist_a_gtb = node_dists[a, gt_b] if a < node_dists.shape[0] and gt_b < node_dists.shape[1] else float("inf")
+            dist_b_gta = node_dists[b, gt_a] if b < node_dists.shape[0] and gt_a < node_dists.shape[1] else float("inf")
+            if (dist_a_gta <= soft_tolerance and dist_b_gtb <= soft_tolerance) or \
+               (dist_a_gtb <= soft_tolerance and dist_b_gta <= soft_tolerance):
+                found_soft = True
+                break
+        if found_soft:
+            score_sum += 0.5
+
+    precision = score_sum / len(pred_edges)
+    recall = score_sum / len(target_edges)
+    f1 = 2 * precision * recall / (precision + recall + 1e-8)
+    return float(precision), float(recall), float(f1)
+
+
 def compute_graph_metrics(
     pred_endpoints: np.ndarray,
     pred_junctions: np.ndarray,
@@ -117,10 +238,10 @@ def compute_graph_metrics(
     Returns:
         GraphMetrics instance.
     """
+    # Strict tier (default tolerance)
     ep, er, ef = _keypoint_prf(pred_endpoints, target_endpoints, tolerance_px)
     jp, jr, jf = _keypoint_prf(pred_junctions, target_junctions, tolerance_px)
 
-    # Edge matching
     pred_n_all = (
         np.concatenate([pred_endpoints, pred_junctions])
         if len(pred_endpoints) + len(pred_junctions) > 0
@@ -132,32 +253,30 @@ def compute_graph_metrics(
         else np.empty((0, 2))
     )
 
-    edge_tp = 0
-    if len(pred_n_all) > 0 and len(target_n_all) > 0 and len(pred_edges) > 0:
-        node_dists = cdist(pred_n_all, target_n_all)
-        # One-to-one node matching
-        row_ind, col_ind = linear_sum_assignment(node_dists)
-        pred_to_target = {}
-        for r, c in zip(row_ind, col_ind):
-            if node_dists[r, c] <= tolerance_px:
-                pred_to_target[r] = c
+    # Edge matching at strict tolerance
+    edge_p, edge_r, edge_f, _ = _edge_prf(
+        pred_n_all, target_n_all, pred_edges, target_edges, tolerance_px,
+    )
 
-        target_edge_set = set()
-        for a, b in target_edges:
-            target_edge_set.add((min(a, b), max(a, b)))
+    # Relaxed tier (10px)
+    _, _, ef_relaxed = _keypoint_prf(pred_endpoints, target_endpoints, RELAXED_TOLERANCE_PX)
+    _, _, jf_relaxed = _keypoint_prf(pred_junctions, target_junctions, RELAXED_TOLERANCE_PX)
+    _, _, edge_f_relaxed, _ = _edge_prf(
+        pred_n_all, target_n_all, pred_edges, target_edges, RELAXED_TOLERANCE_PX,
+    )
 
-        for a, b in pred_edges:
-            if a in pred_to_target and b in pred_to_target:
-                mapped = (
-                    min(pred_to_target[a], pred_to_target[b]),
-                    max(pred_to_target[a], pred_to_target[b]),
-                )
-                if mapped in target_edge_set:
-                    edge_tp += 1
+    # Lenient tier (15px)
+    _, _, ef_lenient = _keypoint_prf(pred_endpoints, target_endpoints, LENIENT_TOLERANCE_PX)
+    _, _, jf_lenient = _keypoint_prf(pred_junctions, target_junctions, LENIENT_TOLERANCE_PX)
+    _, _, edge_f_lenient, _ = _edge_prf(
+        pred_n_all, target_n_all, pred_edges, target_edges, LENIENT_TOLERANCE_PX,
+    )
 
-    edge_p = edge_tp / max(len(pred_edges), 1)
-    edge_r = edge_tp / max(len(target_edges), 1)
-    edge_f = 2 * edge_p * edge_r / (edge_p + edge_r + 1e-8)
+    # Soft edge matching
+    _, _, edge_f_soft = _soft_edge_score(
+        pred_n_all, target_n_all, pred_edges, target_edges,
+        strict_tolerance=tolerance_px, soft_tolerance=LENIENT_TOLERANCE_PX,
+    )
 
     # Width MAE at matched nodes only
     width_mae = 0.0
@@ -179,4 +298,11 @@ def compute_graph_metrics(
         edge_precision=edge_p, edge_recall=edge_r, edge_f1=edge_f,
         width_mae=width_mae,
         false_spur_rate=0.0,
+        endpoint_f1_relaxed=ef_relaxed,
+        junction_f1_relaxed=jf_relaxed,
+        edge_f1_relaxed=edge_f_relaxed,
+        endpoint_f1_lenient=ef_lenient,
+        junction_f1_lenient=jf_lenient,
+        edge_f1_lenient=edge_f_lenient,
+        edge_f1_soft=edge_f_soft,
     )

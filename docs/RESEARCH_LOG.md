@@ -222,3 +222,32 @@ Wave 2 — Schedule and head capacity (base: v4_w10):
 **P2 Gate Decision**: B2 is the only baseline that improves over B0. Carry B2_best config (MSE, unmasked, w=10) forward to P3 graph decoder. Do NOT stack B3/B5 heads — they hurt.
 
 **Next**: P3 — graph decoder design, building on B2_best trunk.
+
+---
+
+### P3-Eval: Graph Extraction Quality — 2026-07-28
+
+**Objective**: Measure how well seg predictions convert to crack graphs; test whether B2's DT improves graph extraction.
+
+**Setup**: 3 extraction methods (A: mask-skeleton, B: DT-threshold, C: DT-guided adaptive ridge), 219 crack images from validation set, 5px keypoint tolerance, Hungarian one-to-one matching.
+
+**Results**:
+
+| Method | endpoint F1 | junction F1 | edge F1 | width MAE | GED | path cont. |
+|--------|-------------|-------------|---------|-----------|-----|------------|
+| B0-A | 0.249 | 0.069 | 0.104 | 0.000 | 0.91 | 0.170 |
+| B2-A | 0.223 | 0.082 | 0.092 | 0.000 | 0.87 | 0.151 |
+| B2-B | 0.264 | 0.076 | 0.072 | 0.000 | 0.76 | 0.132 |
+| B2-C | 0.155 | 0.031 | 0.003 | 1.880 | 1.28 | 0.023 |
+
+**Key findings**:
+1. Edge F1 median = 0.0 for all methods — skeleton-to-graph pipeline is the bottleneck
+2. B0-A beats B2-A on edge F1 (0.104 vs 0.092) and path continuity (0.170 vs 0.151)
+3. Method C catastrophically fails: edge F1 = 0.003, GED = 1.28
+4. DT carries width info (C width MAE = 1.88 best) but not topology
+5. No statistical significance (all Wilcoxon p > 0.27)
+6. Ridge threshold sweep: all thresholds yield edge F1 < 0.01
+
+**Implications for P3**: Post-hoc extraction caps at ~0.10 edge F1. P3 graph decoder must predict nodes + edges directly, not through skeletonization. DT useful for width only.
+
+**Status**: completed

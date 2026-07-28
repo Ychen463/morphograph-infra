@@ -687,6 +687,10 @@ def main() -> None:
     graph_core = [
         "endpoint_f1", "junction_f1", "edge_f1", "width_mae",
         "ged", "path_cont", "degree_kl",
+        # Multi-tier tolerance (from GraphMetrics)
+        "endpoint_f1_relaxed", "junction_f1_relaxed", "edge_f1_relaxed",
+        "endpoint_f1_lenient", "junction_f1_lenient", "edge_f1_lenient",
+        "edge_f1_soft",
     ]
 
     # ── Evaluate each checkpoint ──
@@ -842,11 +846,17 @@ def main() -> None:
         stat_results = {}
         for other_label in labels[1:]:
             stat_results[f"{other_label}_vs_{base_label}"] = {}
-            # Compare Method A
-            test_keys = ["A_endpoint_f1", "A_junction_f1", "A_edge_f1", "A_path_cont"]
+            # Compare Method A (strict + relaxed + lenient + soft)
+            test_keys = [
+                "A_endpoint_f1", "A_junction_f1", "A_edge_f1", "A_path_cont",
+                "A_edge_f1_relaxed", "A_edge_f1_lenient", "A_edge_f1_soft",
+            ]
             # Add Method C if available
             if any("C_edge_f1" in r for r in all_checkpoint_results[other_label]):
-                test_keys.extend(["C_endpoint_f1", "C_junction_f1", "C_edge_f1", "C_path_cont"])
+                test_keys.extend([
+                    "C_endpoint_f1", "C_junction_f1", "C_edge_f1", "C_path_cont",
+                    "C_edge_f1_relaxed", "C_edge_f1_lenient", "C_edge_f1_soft",
+                ])
 
             for key in test_keys:
                 wt = paired_wilcoxon(
