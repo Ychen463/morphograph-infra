@@ -36,6 +36,7 @@ from morphograph.models.graph_decoder import (
 )
 from morphograph.metrics.graph_metrics import (
     compute_graph_metrics, DEFAULT_KEYPOINT_TOLERANCE_PX,
+    _keypoint_prf, _edge_prf,
 )
 from morphograph.training.utils import (
     set_seed, discover_all_samples, split_data,
@@ -70,7 +71,7 @@ def parse_args():
     parser.add_argument("--edge-ramp-epochs", type=int, default=10)
     parser.add_argument("--ss-warmup", type=int, default=10)
     parser.add_argument("--ss-anneal-end", type=int, default=60)
-    parser.add_argument("--node-threshold", type=float, default=0.3)
+    parser.add_argument("--node-threshold", type=float, default=0.1)
     parser.add_argument("--nms-radius", type=int, default=2)
     parser.add_argument("--max-nodes", type=int, default=50)
     parser.add_argument("--heatmap-sigma", type=float, default=1.0)
@@ -189,7 +190,10 @@ def validate(model, val_loader, args, do_nodes, do_edges, device):
     model.eval()
     val_seg_preds, val_seg_targets = [], []
     val_node_f1s = {t: [] for t in [5, 10, 15]}
+    val_ep_f1s = {t: [] for t in [5, 10, 15]}
+    val_jn_f1s = {t: [] for t in [5, 10, 15]}
     val_edge_f1s = {t: [] for t in [5, 10, 15]}
+    val_edge_gt_f1s = {t: [] for t in [5, 10, 15]}  # Edge F1 using GT nodes
 
     for batch in val_loader:
         images = batch["image"].to(device)
@@ -231,20 +235,37 @@ def validate(model, val_loader, args, do_nodes, do_edges, device):
             gt_jn = gt_coords_512[gt_jn_mask] if gt_jn_mask.any() else np.empty((0, 2))
 
             pred_edges = []
-            if do_edges and len(detected.coords) >= 2:
+            pred_edges_gt = []  # Edges predicted using GT node positions
+            if do_edges:
                 dt_128 = F.interpolate(
                     torch.sigmoid(outputs["skeleton"][b_idx:b_idx+1]),
                     size=(128, 128), mode="bilinear", align_corners=False,
                 )
-                candidates = build_candidate_pairs(detected.coords, k=args.knn_k)
-                if len(candidates) > 0:
-                    edge_logits = model.edge_classifier(
-                        outputs["_fpn"][b_idx:b_idx+1], dt_128,
-                        detected.coords, detected.types, detected.scores, candidates,
-                    )
-                    mask = torch.sigmoid(edge_logits) > 0.5
-                    pred_edges = [(min(a, b), max(a, b))
-                                  for a, b in candidates[mask].cpu().tolist()]
+                # Edge prediction from detected nodes
+                if len(detected.coords) >= 2:
+                    candidates = build_candidate_pairs(detected.coords, k=args.knn_k)
+                    if len(candidates) > 0:
+                        edge_logits = model.edge_classifier(
+                            outputs["_fpn"][b_idx:b_idx+1], dt_128,
+                            detected.coords, detected.types, detected.scores, candidates,
+                        )
+                        mask = torch.sigmoid(edge_logits) > 0.5
+                        pred_edges = [(min(a, b), max(a, b))
+                                      for a, b in candidates[mask].cpu().tolist()]
+                # Edge prediction from GT nodes (for Gate 2 evaluation)
+                gt_c = gt_coords.to(device)
+                gt_t = gt_types.to(device)
+                if len(gt_c) >= 2:
+                    gt_candidates = build_candidate_pairs(gt_c, k=args.knn_k)
+                    if len(gt_candidates) > 0:
+                        gt_scores = torch.ones(len(gt_c), device=device)
+                        gt_edge_logits = model.edge_classifier(
+                            outputs["_fpn"][b_idx:b_idx+1], dt_128,
+                            gt_c, gt_t, gt_scores, gt_candidates,
+                        )
+                        gt_mask = torch.sigmoid(gt_edge_logits) > 0.5
+                        pred_edges_gt = [(min(a, b), max(a, b))
+                                         for a, b in gt_candidates[gt_mask].cpu().tolist()]
 
             for tol in [5, 10, 15]:
                 gm = compute_graph_metrics(
@@ -252,15 +273,31 @@ def validate(model, val_loader, args, do_nodes, do_edges, device):
                     gt_ep, gt_jn, gt_edges,
                     tolerance_px=float(tol),
                 )
-                val_node_f1s[tol].append((gm.endpoint_f1 + gm.junction_f1) / 2)
+                # Type-pooled node F1: match all nodes regardless of type
+                _, _, pooled_f1 = _keypoint_prf(
+                    pred_coords_512, gt_coords_512, float(tol),
+                )
+                val_node_f1s[tol].append(pooled_f1)
+                val_ep_f1s[tol].append(gm.endpoint_f1)
+                val_jn_f1s[tol].append(gm.junction_f1)
                 val_edge_f1s[tol].append(gm.edge_f1)
+                # Edge F1 with GT node positions (adjacency-only metric)
+                if do_edges:
+                    _, _, ef_gt, _ = _edge_prf(
+                        gt_coords_512, gt_coords_512,
+                        pred_edges_gt, gt_edges, float(tol),
+                    )
+                    val_edge_gt_f1s[tol].append(ef_gt)
 
     miou = compute_miou(torch.cat(val_seg_preds), torch.cat(val_seg_targets))
     metrics = {"mIoU_fg": miou["mIoU_fg"]}
     if do_nodes:
         for t in [5, 10, 15]:
             metrics[f"node_f1@{t}px"] = float(np.mean(val_node_f1s[t])) if val_node_f1s[t] else 0.0
+            metrics[f"ep_f1@{t}px"] = float(np.mean(val_ep_f1s[t])) if val_ep_f1s[t] else 0.0
+            metrics[f"jn_f1@{t}px"] = float(np.mean(val_jn_f1s[t])) if val_jn_f1s[t] else 0.0
             metrics[f"edge_f1@{t}px"] = float(np.mean(val_edge_f1s[t])) if val_edge_f1s[t] else 0.0
+            metrics[f"edge_gt_f1@{t}px"] = float(np.mean(val_edge_gt_f1s[t])) if val_edge_gt_f1s[t] else 0.0
     return metrics
 
 
@@ -382,7 +419,10 @@ def main() -> None:
         if do_nodes:
             for t in [5, 10, 15]:
                 history[f"val_node_f1@{t}px"].append(val_metrics[f"node_f1@{t}px"])
+                history[f"val_ep_f1@{t}px"].append(val_metrics[f"ep_f1@{t}px"])
+                history[f"val_jn_f1@{t}px"].append(val_metrics[f"jn_f1@{t}px"])
                 history[f"val_edge_f1@{t}px"].append(val_metrics[f"edge_f1@{t}px"])
+                history[f"val_edge_gt_f1@{t}px"].append(val_metrics[f"edge_gt_f1@{t}px"])
 
         # Checkpoint
         if do_nodes:
@@ -406,9 +446,11 @@ def main() -> None:
         loss_str = " ".join(f"{k}={v:.4f}" for k, v in avgs.items())
         graph_str = ""
         if do_nodes:
-            graph_str = f"nF1@5={val_metrics['node_f1@5px']:.3f}"
+            graph_str = (f"nF1@5={val_metrics['node_f1@5px']:.3f}"
+                         f"(ep={val_metrics['ep_f1@5px']:.3f},jn={val_metrics['jn_f1@5px']:.3f})")
         if do_edges:
-            graph_str += f" eF1@5={val_metrics['edge_f1@5px']:.3f}"
+            graph_str += (f" eF1@5={val_metrics['edge_f1@5px']:.3f}"
+                          f" eF1_gt@5={val_metrics['edge_gt_f1@5px']:.3f}")
         print(f"Epoch {epoch:3d}/{args.epochs} | {loss_str} | "
               f"mIoU={val_metrics['mIoU_fg']:.4f} {graph_str} | "
               f"{elapsed:.0f}s{' *' if is_best else ''}")
@@ -449,7 +491,10 @@ def main() -> None:
         "phase": args.phase, "best_miou_fg": best_miou_fg,
         "best_node_f1_5px": best_node_f1 if do_nodes else None,
         "final_val_node_f1_5px": history.get("val_node_f1@5px", [None])[-1],
+        "final_val_ep_f1_5px": history.get("val_ep_f1@5px", [None])[-1] if do_nodes else None,
+        "final_val_jn_f1_5px": history.get("val_jn_f1@5px", [None])[-1] if do_nodes else None,
         "final_val_edge_f1_10px": history.get("val_edge_f1@10px", [None])[-1] if do_edges else None,
+        "final_val_edge_gt_f1_10px": history.get("val_edge_gt_f1@10px", [None])[-1] if do_edges else None,
         "epochs": args.epochs, "total_params": param_counts["total"],
         "overfit": args.overfit, "train_samples": len(train_pairs),
     }
