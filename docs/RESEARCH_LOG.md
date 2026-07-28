@@ -170,6 +170,55 @@ Wave 2 — Schedule and head capacity (base: v4_w10):
 
 **Best config**: MSE, unmasked, w=10.0 → mIoU_fg=0.683 (+1.0% vs B0)
 
-**Next Steps**: Multi-seed validation (seed=42/123/456) on v4_w10 to confirm the +1.0% gain is robust before locking B2 config.
+**Status**: completed (best config identified, multi-seed pending)
 
-**Status**: in-progress
+---
+
+### P2-B3/B5: Keypoint and Width Supervision — 2026-07-25 to 2026-07-28
+
+**Objective**: Test whether endpoint/junction (B3) and width (B5) auxiliary heads improve segmentation. B4 (edge connectivity) skipped — loss conflicts with DT regression on same skeleton head.
+
+**Setup**:
+- B3: B2_best + endpoint head (pos_weight=200) + junction head (pos_weight=100)
+- B5: B3 + width head (SmoothL1 on skeleton pixels)
+- Three tuning rounds: (1) high weights, (2) reduced weights, (3) scheduled ramp-up
+
+**Results** (best of 3 rounds per baseline):
+
+| Baseline | Config | mIoU_fg | Delta vs B0 |
+|----------|--------|---------|-------------|
+| B0 | seg only | 0.673 | — |
+| B2_best | +skel DT (MSE, unmask, w=10) | **0.683** | **+1.0%** |
+| B3 | +ep/jn (scheduled, w=0.3) | 0.668 | -0.5% |
+| B5 | +width (scheduled, w=0.5) | 0.646 | -2.7% |
+
+**Observations**:
+- Round 1 (high weights): ep/jn overwhelmed seg loss (total ~10x seg). B3=0.659, B5=0.651.
+- Round 2 (reduced weights): better balance but still below B0. B3=0.667, B5=0.644.
+- Round 3 (scheduled ramp, start=20/30): no improvement. B3=0.668, B5=0.646.
+- B3: keypoint heads learn fine but contribute nothing to mIoU_fg. Endpoints/junctions are too sparse (~10 pixels/image) to provide useful encoder gradient.
+- B5: width loss never converges (raw loss ~7.0 at epoch 100). SmoothL1 on skeleton pixels (< 0.1% of image) with values 2-20px = too sparse, too hard.
+- **Key conclusion: only dense supervision (DT on ALL pixels) helps mIoU. Sparse supervision (keypoints, width on skeleton) hurts segmentation by introducing gradient noise.**
+
+**Implications for P3**:
+- Graph decoder should NOT rely on sparse pixel-level auxiliary losses
+- Dense, full-image supervision signals are essential (B2 DT unmasked proved this)
+- Keypoint/width prediction may work better as post-hoc extraction from predicted skeleton, not as training losses
+
+**Status**: completed
+
+---
+
+### Baseline Ladder Summary (P2)
+
+| Baseline | Description | mIoU_fg | Delta vs B0 | Verdict |
+|----------|-------------|---------|-------------|---------|
+| B0 | CE+Dice seg only | 0.673 | — | baseline |
+| B1a | +clDice | 0.657 | -1.6% | implicit topology loss hurts |
+| **B2** | **+skeleton DT (MSE, unmask, w=10)** | **0.683** | **+1.0%** | **dense DT helps** |
+| B3 | +endpoint/junction heads | 0.668 | -0.5% | sparse keypoint noise |
+| B5 | +width regression | 0.646 | -2.7% | width loss doesn't converge |
+
+**P2 Gate Decision**: B2 is the only baseline that improves over B0. Carry B2_best config (MSE, unmasked, w=10) forward to P3 graph decoder. Do NOT stack B3/B5 heads — they hurt.
+
+**Next**: P3 — graph decoder design, building on B2_best trunk.
