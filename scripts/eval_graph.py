@@ -1,17 +1,24 @@
-"""Graph-level evaluation: compare B0 vs B2_best on crack graph extraction quality.
+"""Graph-level evaluation: compare B0 vs B2_best vs P3 on crack graph extraction quality.
 
 Usage:
     python scripts/eval_graph.py --data-root data/raw \
         --checkpoints runs/B0/best.pt runs/B2_dt_v5/best.pt \
         --labels B0 B2_best --output runs/eval_graph
 
+    # With P3 model (Method D: direct graph decoder):
+    python scripts/eval_graph.py --data-root data/raw \
+        --checkpoints runs/B2_dt_v5/best.pt runs/P3b/best.pt \
+        --labels B2_best P3b --output runs/eval_graph_p3
+
 Computes per-image pixel metrics (mIoU, clDice, ConnR, BF1) AND graph metrics
 (endpoint/junction/edge F1, width MAE) for each checkpoint.
 
-Three graph extraction methods:
+Four graph extraction methods:
   A: seg mask -> morphological skeleton -> graph (all models)
   B: predicted DT > threshold -> skeleton -> graph (B2 only)
   C: seg mask + predicted DT -> adaptive ridge -> graph (B2 only, novelty)
+  D: direct graph-topology prediction with learned-field edge geometry recovery (P3 only)
+     (hybrid: topology from decoder, polylines from DT cost-field routing)
 """
 
 from __future__ import annotations
@@ -52,7 +59,10 @@ from morphograph.metrics.segmentation import (
     compute_connectivity_recall,
     compute_boundary_f1,
 )
-from morphograph.models.morphograph_net import MorphoAuxNet, BASELINE_HEADS
+from morphograph.models.morphograph_net import MorphoAuxNet, MorphoGraphNet, BASELINE_HEADS
+from morphograph.models.graph_decoder import (
+    extract_nodes, build_candidate_pairs, recover_edge_paths,
+)
 from morphograph.training.utils import set_seed, discover_all_samples, split_data
 
 import matplotlib
@@ -64,10 +74,25 @@ import matplotlib.pyplot as plt
 # ── Model loading (same pattern as eval_topology.py) ──
 
 
-def load_model(checkpoint_path: Path, device: torch.device) -> MorphoAuxNet:
-    """Load model from checkpoint, auto-detecting head config."""
+def load_model(checkpoint_path: Path, device: torch.device):
+    """Load model from checkpoint, auto-detecting B0-B5 vs P3."""
     ckpt = torch.load(checkpoint_path, map_location=device, weights_only=False)
     state = ckpt["model_state_dict"]
+
+    # Detect P3 model by presence of fpn128 keys
+    is_p3 = any(k.startswith("fpn128.") for k in state)
+
+    if is_p3:
+        # Detect whether graph heads are present (P3a/P3b vs P3-Base)
+        has_graph_heads = any(k.startswith("node_head.") for k in state)
+        model = MorphoGraphNet(
+            backbone="mit_b2",
+            num_classes=NUM_CLASSES,
+            graph_heads=has_graph_heads,
+        ).to(device)
+        model.load_state_dict(state)
+        model.eval()
+        return model
 
     has_skeleton = any(k.startswith("skeleton_head.") for k in state)
     has_endpoint = any(k.startswith("endpoint_head.") for k in state)
@@ -169,6 +194,75 @@ def extract_graph_c(
         min_branch_length=10,
         junction_merge_radius=5,
         binary_mask=crack_mask,
+    )
+
+
+def extract_graph_d(
+    model: MorphoGraphNet,
+    outputs: dict[str, torch.Tensor],
+    node_threshold: float = 0.3,
+    nms_radius: int = 3,
+    max_nodes: int = 50,
+    knn_k: int = 8,
+    edge_threshold: float = 0.5,
+) -> CrackGraph:
+    """Method D: direct graph decoder (P3 only, no skeleton extraction)."""
+    import torch.nn.functional as Fd
+
+    hm = torch.sigmoid(outputs["node_heatmap"])
+    detected = extract_nodes(hm, threshold=node_threshold,
+                             nms_radius=nms_radius, max_nodes=max_nodes)[0]
+
+    if len(detected.coords) < 1:
+        return CrackGraph(
+            endpoints=np.empty((0, 2), dtype=int),
+            junctions=np.empty((0, 2), dtype=int),
+        )
+
+    # Scale to 512-space
+    coords_512 = detected.coords.cpu().numpy() * 4.0
+
+    # Split by type
+    types_np = detected.types.cpu().numpy()
+    ep_mask = types_np == 0
+    jn_mask = types_np == 1
+    endpoints = coords_512[ep_mask].astype(int) if ep_mask.any() else np.empty((0, 2), dtype=int)
+    junctions = coords_512[jn_mask].astype(int) if jn_mask.any() else np.empty((0, 2), dtype=int)
+
+    if len(detected.coords) < 2:
+        return CrackGraph(endpoints=endpoints, junctions=junctions)
+
+    # Edge prediction
+    dt_128 = Fd.interpolate(
+        torch.sigmoid(outputs["skeleton"]),
+        size=(128, 128), mode="bilinear", align_corners=False,
+    )
+    candidates = build_candidate_pairs(detected.coords, k=knn_k)
+
+    if len(candidates) == 0:
+        return CrackGraph(endpoints=endpoints, junctions=junctions)
+
+    edge_logits = model.edge_classifier(
+        outputs["_fpn"][:1],
+        dt_128[:1],
+        detected.coords,
+        detected.types,
+        detected.scores,
+        candidates,
+    )
+    pred_edge_mask = torch.sigmoid(edge_logits) > edge_threshold
+    pred_edges = candidates[pred_edge_mask].cpu().tolist()
+    pred_edges = [(min(a, b), max(a, b)) for a, b in pred_edges]
+
+    # P3c: recover edge polylines via Dijkstra
+    dt_np = torch.sigmoid(outputs["skeleton"])[0, 0].cpu().numpy()
+    edge_paths = recover_edge_paths(dt_np, coords_512, pred_edges)
+
+    return CrackGraph(
+        endpoints=endpoints,
+        junctions=junctions,
+        edges=pred_edges,
+        edge_paths=edge_paths,
     )
 
 
@@ -308,13 +402,14 @@ def _graph_metrics_dict(
 
 
 def evaluate_single_image(
-    model: MorphoAuxNet,
+    model,
     img_path: Path,
     mask_path: Path,
     device: torch.device,
     has_dt: bool,
     kp_tolerance: float,
     ridge_threshold: float,
+    is_p3: bool = False,
     img_size: int = 512,
 ) -> dict | None:
     """Evaluate one image, returning all metrics or None if no crack."""
@@ -346,7 +441,7 @@ def evaluate_single_image(
     pred_crack = (pred_seg == 1).astype(np.uint8)
 
     dt_pred = None
-    if has_dt:
+    if has_dt or is_p3:
         dt_pred = torch.sigmoid(outputs["skeleton"])[0, 0].cpu().numpy()
 
     # ── Pixel metrics ──
@@ -376,7 +471,7 @@ def evaluate_single_image(
     )
 
     # ── Methods B & C (B2 only) ──
-    if has_dt and dt_pred is not None:
+    if has_dt and dt_pred is not None and not is_p3:
         pred_graph_b = extract_graph_b(dt_pred, threshold=0.5)
         result.update(
             _graph_metrics_dict(pred_graph_b, gt_graph, kp_tolerance, "B")
@@ -385,6 +480,13 @@ def evaluate_single_image(
         pred_graph_c = extract_graph_c(pred_crack, dt_pred, ridge_threshold)
         result.update(
             _graph_metrics_dict(pred_graph_c, gt_graph, kp_tolerance, "C")
+        )
+
+    # ── Method D (P3 only) ──
+    if is_p3:
+        pred_graph_d = extract_graph_d(model, outputs)
+        result.update(
+            _graph_metrics_dict(pred_graph_d, gt_graph, kp_tolerance, "D")
         )
 
     return result
@@ -703,10 +805,11 @@ def main() -> None:
         print(f"{'=' * 60}")
 
         model = load_model(ckpt_path, device)
-        has_dt = any(
+        is_p3 = isinstance(model, MorphoGraphNet) and model.has_graph_heads
+        has_dt = isinstance(model, MorphoGraphNet) or any(
             k.startswith("skeleton_head.") for k in model.state_dict()
         )
-        if has_dt:
+        if has_dt and not is_p3:
             dt_model_label = label
 
         per_image = []
@@ -716,6 +819,7 @@ def main() -> None:
                 has_dt=has_dt,
                 kp_tolerance=args.kp_tolerance,
                 ridge_threshold=args.ridge_threshold,
+                is_p3=is_p3,
             )
             if result is not None:
                 per_image.append(result)
@@ -729,7 +833,9 @@ def main() -> None:
 
         # Determine which method keys to aggregate
         methods = ["A"]
-        if has_dt:
+        if is_p3:
+            methods.append("D")
+        elif has_dt:
             methods.extend(["B", "C"])
 
         for method in methods:
@@ -808,7 +914,12 @@ def main() -> None:
     for label in labels:
         per_image = all_checkpoint_results[label]
         has_dt = any("C_edge_f1" in r for r in per_image)
-        methods = ["A"] + (["B", "C"] if has_dt else [])
+        has_d = any("D_edge_f1" in r for r in per_image)
+        methods = ["A"]
+        if has_d:
+            methods.append("D")
+        elif has_dt:
+            methods.extend(["B", "C"])
 
         for method in methods:
             tag = f"{label}-{method}"
@@ -838,9 +949,13 @@ def main() -> None:
     print()
 
     # ── Statistical tests ──
+    # Pre-specified primary endpoint: edge F1 @10px (relaxed tolerance).
+    # All other comparisons are exploratory.
+    PRIMARY_METRIC = "D_edge_f1_relaxed"  # or A_/C_ depending on method
     if len(labels) >= 2:
         print("=" * 60)
         print("STATISTICAL TESTS (Wilcoxon signed-rank)")
+        print(f"  Primary endpoint: edge F1 @10px (relaxed tolerance)")
         print("=" * 60)
         base_label = labels[0]
         stat_results = {}
@@ -856,6 +971,12 @@ def main() -> None:
                 test_keys.extend([
                     "C_endpoint_f1", "C_junction_f1", "C_edge_f1", "C_path_cont",
                     "C_edge_f1_relaxed", "C_edge_f1_lenient", "C_edge_f1_soft",
+                ])
+            # Add Method D if available
+            if any("D_edge_f1" in r for r in all_checkpoint_results[other_label]):
+                test_keys.extend([
+                    "D_endpoint_f1", "D_junction_f1", "D_edge_f1", "D_path_cont",
+                    "D_edge_f1_relaxed", "D_edge_f1_lenient", "D_edge_f1_soft",
                 ])
 
             for key in test_keys:
@@ -881,7 +1002,12 @@ def main() -> None:
     for label in labels:
         per_image = all_checkpoint_results[label]
         has_dt = any("C_edge_f1" in r for r in per_image)
-        methods = ["A"] + (["C"] if has_dt else [])
+        has_d = any("D_edge_f1" in r for r in per_image)
+        methods = ["A"]
+        if has_d:
+            methods.append("D")
+        elif has_dt:
+            methods.append("C")
         for method in methods:
             tag = f"{label}-{method}"
             mkeys = [f"{method}_{k}" for k in chart_metric_suffixes]
@@ -922,6 +1048,7 @@ def main() -> None:
     # Summary JSON
     summary = {
         "val_samples": len(val_pairs),
+        "primary_endpoint": "edge_f1_relaxed (@10px)",
         "params": {
             "kp_tolerance": args.kp_tolerance,
             "ridge_threshold": args.ridge_threshold,
@@ -932,7 +1059,12 @@ def main() -> None:
     for label in labels:
         per_image = all_checkpoint_results[label]
         has_dt = any("C_edge_f1" in r for r in per_image)
-        methods = ["A"] + (["B", "C"] if has_dt else [])
+        has_d = any("D_edge_f1" in r for r in per_image)
+        methods = ["A"]
+        if has_d:
+            methods.append("D")
+        elif has_dt:
+            methods.extend(["B", "C"])
         model_summary = {"n_crack_images": len(per_image)}
         model_summary["pixel"] = aggregate_metrics(per_image, pixel_keys)
         for method in methods:

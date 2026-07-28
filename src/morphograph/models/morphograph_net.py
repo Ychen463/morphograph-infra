@@ -1,37 +1,21 @@
-"""Morphology Auxiliary Network: shared encoder + FPN + multi-task heads.
+"""Morphology Auxiliary/Graph Network: shared encoder + FPN + multi-task heads.
 
-Current scope: dense morphology auxiliary predictions (B0-B5).
-NOT yet a graph reconstruction model — see module docstring for roadmap.
+B0-B5 scope: dense morphology auxiliary predictions via MorphoAuxNet.
+P3 scope: direct graph prediction via MorphoGraphNet.
 
-Architecture:
-    MiT-B2 encoder -> SharedFPN (project + fuse) -> per-task output layers
+Architecture (B0-B5):
+    MiT-B2 encoder -> SharedFPN (project + fuse at 512x512) -> per-task heads
 
-    All heads share the FPN trunk to:
-    - Reduce parameter redundancy vs. per-head projection
-    - Simplify capacity-controlled ablation
-    - Allow consistent multi-resolution output
-
-Output resolutions:
-    seg_head:       full resolution (H, W) — logits
-    skeleton_head:  full resolution (H, W) — logits
-    endpoint_head:  full resolution (H, W) — logits
-    junction_head:  full resolution (H, W) — logits
-    width_head:     full resolution (H, W) — raw (non-negative)
-
-All heads output raw logits (no sigmoid/softmax in model).
-Use BCEWithLogitsLoss or cross_entropy in the loss module.
+Architecture (P3):
+    MiT-B2 encoder -> SharedFPN128 (fuse at 128x128) -> SegDecoder/DTDecoder (128->512)
+                                                      -> NodeHeatmapHead (128x128)
+                                                      -> EdgeClassifier (per-node)
 
 SegFormer-B2 (MiT-B2) encoder feature dimensions at 512x512 input:
     Stage 1: (B,  64, 128, 128)  — 1/4
     Stage 2: (B, 128,  64,  64)  — 1/8
     Stage 3: (B, 320,  32,  32)  — 1/16
     Stage 4: (B, 512,  16,  16)  — 1/32
-
-Roadmap (what this module does NOT yet do):
-    - Explicit graph decoder (node detection -> pairwise connectivity
-      -> edge polyline -> graph pruning) — needed for P3/B5+
-    - Spalling instance head (center + boundary + offset) — needed for B6
-    - Relation head (pairwise crack-spalling classifier) — needed for P5/B7
 """
 
 from __future__ import annotations
@@ -423,3 +407,293 @@ class MorphoAuxNet(nn.Module):
             {"params": encoder_params, "lr": encoder_lr},
             {"params": other_params, "lr": head_lr},
         ]
+
+
+# ======================================================================
+# P3: Direct Graph Prediction (MorphoGraphNet)
+# ======================================================================
+
+
+class SharedFPN128(nn.Module):
+    """FPN variant that fuses at 128x128 (1/4 res) instead of full resolution.
+
+    Same lateral projections and top-down pathway as SharedFPN.
+    All levels upsample to 128x128, saving ~16x memory on the output tensor.
+    Conv weights are resolution-agnostic — transfer directly from SharedFPN.
+    """
+
+    def __init__(
+        self,
+        in_channels: tuple[int, ...] = MIT_B2_CHANNELS,
+        fpn_dim: int = FPN_DIM,
+    ) -> None:
+        super().__init__()
+        self.laterals = nn.ModuleList([
+            nn.Sequential(
+                nn.Conv2d(ch, fpn_dim, 1, bias=False),
+                nn.GroupNorm(32, fpn_dim),
+                nn.GELU(),
+            )
+            for ch in in_channels
+        ])
+        self.smooths = nn.ModuleList([
+            nn.Sequential(
+                nn.Conv2d(fpn_dim, fpn_dim, 3, padding=1, bias=False),
+                nn.GroupNorm(32, fpn_dim),
+                nn.GELU(),
+            )
+            for _ in in_channels
+        ])
+        self.fuse = nn.Sequential(
+            nn.Conv2d(fpn_dim * len(in_channels), fpn_dim, 1, bias=False),
+            nn.GroupNorm(32, fpn_dim),
+            nn.GELU(),
+        )
+        self.fpn_dim = fpn_dim
+
+    def forward(self, features: list[torch.Tensor]) -> torch.Tensor:
+        """Produce fused feature map at 128x128.
+
+        Args:
+            features: list of 4 encoder stage outputs.
+
+        Returns:
+            (B, fpn_dim, 128, 128) fused feature map.
+        """
+        target_size = (128, 128)
+
+        laterals = [lat(feat) for lat, feat in zip(self.laterals, features)]
+
+        for i in range(len(laterals) - 1, 0, -1):
+            upsampled = F.interpolate(
+                laterals[i], size=laterals[i - 1].shape[2:],
+                mode="bilinear", align_corners=False,
+            )
+            laterals[i - 1] = laterals[i - 1] + upsampled
+
+        outputs = []
+        for lat, smooth in zip(laterals, self.smooths):
+            x = smooth(lat)
+            if x.shape[2:] != target_size:
+                x = F.interpolate(
+                    x, size=target_size,
+                    mode="bilinear", align_corners=False,
+                )
+            outputs.append(x)
+
+        return self.fuse(torch.cat(outputs, dim=1))
+
+
+class SegDecoder(nn.Module):
+    """Lightweight decoder: 128x128 FPN features -> 512x512 segmentation.
+
+    Conv(256->128, 3x3) + GN + GELU -> Upsample(x4) -> Conv(128->C, 1x1)
+    """
+
+    def __init__(self, fpn_dim: int = FPN_DIM, num_classes: int = 3) -> None:
+        super().__init__()
+        self.decoder = nn.Sequential(
+            nn.Conv2d(fpn_dim, fpn_dim // 2, 3, padding=1, bias=False),
+            nn.GroupNorm(16, fpn_dim // 2),
+            nn.GELU(),
+        )
+        self.head = nn.Conv2d(fpn_dim // 2, num_classes, 1)
+
+    def forward(self, fpn_features: torch.Tensor) -> torch.Tensor:
+        x = self.decoder(fpn_features)
+        x = F.interpolate(x, scale_factor=4, mode="bilinear", align_corners=False)
+        return self.head(x)
+
+
+class DTDecoder(nn.Module):
+    """Lightweight decoder: 128x128 FPN features -> 512x512 DT prediction.
+
+    Conv(256->128, 3x3) + GN + GELU -> Upsample(x4) -> Conv(128->1, 1x1)
+    """
+
+    def __init__(self, fpn_dim: int = FPN_DIM) -> None:
+        super().__init__()
+        self.decoder = nn.Sequential(
+            nn.Conv2d(fpn_dim, fpn_dim // 2, 3, padding=1, bias=False),
+            nn.GroupNorm(16, fpn_dim // 2),
+            nn.GELU(),
+        )
+        self.head = nn.Conv2d(fpn_dim // 2, 1, 1)
+
+    def forward(self, fpn_features: torch.Tensor) -> torch.Tensor:
+        x = self.decoder(fpn_features)
+        x = F.interpolate(x, scale_factor=4, mode="bilinear", align_corners=False)
+        return self.head(x)
+
+
+class MorphoGraphNet(nn.Module):
+    """P3 model: shared encoder + FPN at 128x128 + optional graph heads.
+
+    When graph_heads=False, this is the P3-Base architectural control:
+    same FPN128 + SegDecoder + DTDecoder, but NO graph supervision.
+    This isolates the effect of the decoder change from graph prediction.
+
+    Ablation ladder:
+        B2:      SharedFPN@512 + SegHead + SkeletonHead
+        P3-Base: SharedFPN128 + SegDecoder + DTDecoder (no graph heads)
+        P3a:     P3-Base + NodeHeatmapHead
+        P3b:     P3a + EdgeClassifier
+        P3c:     P3b + Dijkstra path recovery (inference only)
+    """
+
+    def __init__(
+        self,
+        backbone: str = "mit_b2",
+        num_classes: int = 3,
+        fpn_dim: int = FPN_DIM,
+        graph_heads: bool = True,
+    ) -> None:
+        super().__init__()
+        self.backbone_name = backbone
+        self.num_classes = num_classes
+        self.fpn_dim = fpn_dim
+        self.has_graph_heads = graph_heads
+
+        self.encoder = MorphoAuxNet._build_encoder(backbone)
+        self.fpn128 = SharedFPN128(MIT_B2_CHANNELS, fpn_dim)
+        self.seg_decoder = SegDecoder(fpn_dim, num_classes)
+        self.dt_decoder = DTDecoder(fpn_dim)
+
+        if graph_heads:
+            from morphograph.models.graph_decoder import NodeHeatmapHead, EdgeClassifier
+            self.node_head = NodeHeatmapHead(fpn_dim)
+            self.edge_classifier = EdgeClassifier(fpn_dim)
+
+    def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
+        """Forward pass. EdgeClassifier called separately in training loop.
+
+        Returns:
+            seg: (B, C, 512, 512) class logits.
+            skeleton: (B, 1, 512, 512) DT logits.
+            node_heatmap: (B, 2, 128, 128) node logits (only if graph_heads).
+            _fpn: (B, 256, 128, 128) for edge classifier (only if graph_heads).
+        """
+        enc_out = self.encoder(x, output_hidden_states=True, return_dict=True)
+        features = list(enc_out.hidden_states)
+
+        fpn = self.fpn128(features)
+
+        outputs = {
+            "seg": self.seg_decoder(fpn),
+            "skeleton": self.dt_decoder(fpn),
+        }
+        if self.has_graph_heads:
+            outputs["node_heatmap"] = self.node_head(fpn)
+            outputs["_fpn"] = fpn
+
+        return outputs
+
+    def count_parameters(self) -> dict[str, int]:
+        counts = {
+            "encoder": sum(p.numel() for p in self.encoder.parameters()),
+            "fpn128": sum(p.numel() for p in self.fpn128.parameters()),
+            "seg_decoder": sum(p.numel() for p in self.seg_decoder.parameters()),
+            "dt_decoder": sum(p.numel() for p in self.dt_decoder.parameters()),
+        }
+        if self.has_graph_heads:
+            counts["node_head"] = sum(p.numel() for p in self.node_head.parameters())
+            counts["edge_classifier"] = sum(p.numel() for p in self.edge_classifier.parameters())
+        total = sum(counts.values())
+        trainable = sum(p.numel() for p in self.parameters() if p.requires_grad)
+        counts["total"] = total
+        counts["trainable"] = trainable
+        return counts
+
+    def get_param_groups(
+        self,
+        encoder_lr: float = 6e-5,
+        head_lr: float = 3e-4,
+    ) -> list[dict]:
+        """Param groups: encoder, fpn+decoders, graph heads (if present)."""
+        encoder_params = list(self.encoder.parameters())
+        fpn_decoder_params = (
+            list(self.fpn128.parameters())
+            + list(self.seg_decoder.parameters())
+            + list(self.dt_decoder.parameters())
+        )
+        groups = [
+            {"params": encoder_params, "lr": encoder_lr},
+            {"params": fpn_decoder_params, "lr": head_lr},
+        ]
+        if self.has_graph_heads:
+            graph_params = (
+                list(self.node_head.parameters())
+                + list(self.edge_classifier.parameters())
+            )
+            groups.append({"params": graph_params, "lr": head_lr})
+        return groups
+
+
+def load_b2_into_p3(
+    b2_ckpt_path: str,
+    p3_model: MorphoGraphNet,
+    device: torch.device | str = "cpu",
+) -> tuple[list[str], list[str]]:
+    """Transfer B2 checkpoint weights into P3 model.
+
+    Transfers (shape-checked, skip on mismatch):
+      - Encoder: exact copy (all keys match)
+      - FPN laterals/smooths/fuse: exact copy (conv weights are resolution-agnostic)
+      - SegHead -> SegDecoder final conv: only if shapes match
+        (B2 SegHead is 256->3 1x1, SegDecoder.head is 128->3 1x1 — shape
+        mismatch, so this is SKIPPED in practice; SegDecoder re-initializes)
+      - SkeletonHead -> DTDecoder: skipped (64-ch vs 128-ch intermediate)
+
+    New heads (NodeHeatmapHead, EdgeClassifier) stay randomly initialized.
+
+    Returns:
+        (loaded_keys, skipped_keys) for logging.
+    """
+    ckpt = torch.load(b2_ckpt_path, map_location=device, weights_only=False)
+    b2_state = ckpt["model_state_dict"]
+
+    p3_state = p3_model.state_dict()
+    loaded = []
+    skipped = []
+
+    for b2_key, b2_val in b2_state.items():
+        # Encoder: direct copy
+        if b2_key.startswith("encoder."):
+            if b2_key in p3_state and p3_state[b2_key].shape == b2_val.shape:
+                p3_state[b2_key] = b2_val
+                loaded.append(b2_key)
+            else:
+                skipped.append(b2_key)
+
+        # FPN -> FPN128: laterals, smooths, fuse are resolution-agnostic
+        elif b2_key.startswith("fpn."):
+            p3_key = b2_key.replace("fpn.", "fpn128.", 1)
+            if p3_key in p3_state and p3_state[p3_key].shape == b2_val.shape:
+                p3_state[p3_key] = b2_val
+                loaded.append(f"{b2_key} -> {p3_key}")
+            else:
+                skipped.append(b2_key)
+
+        # SegHead -> SegDecoder final conv
+        elif b2_key.startswith("seg_head.head."):
+            # B2 SegHead: nn.Conv2d(256, 3, 1) keyed as "seg_head.head.weight/bias"
+            suffix = b2_key.replace("seg_head.head.", "")
+            p3_key = f"seg_decoder.head.{suffix}"
+            if p3_key in p3_state and p3_state[p3_key].shape == b2_val.shape:
+                p3_state[p3_key] = b2_val
+                loaded.append(f"{b2_key} -> {p3_key}")
+            else:
+                skipped.append(b2_key)
+
+        # SkeletonHead -> DTDecoder
+        elif b2_key.startswith("skeleton_head.head."):
+            # B2 SkeletonHead: Sequential(Conv(256,64,3)+GN+GELU, Conv(64,1,1))
+            # DTDecoder: Sequential(Conv(256,128,3)+GN+GELU), head=Conv(128,1,1)
+            # Shapes differ (64 vs 128), so skip — DTDecoder is re-initialized
+            skipped.append(b2_key)
+
+        else:
+            skipped.append(b2_key)
+
+    p3_model.load_state_dict(p3_state)
+    return loaded, skipped
