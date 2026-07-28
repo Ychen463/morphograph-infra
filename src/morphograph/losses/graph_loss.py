@@ -50,7 +50,7 @@ class NodeHeatmapLoss(nn.Module):
         pred = torch.sigmoid(pred_logits)
         pred = pred.clamp(1e-6, 1.0 - 1e-6)
 
-        pos_mask = target_heatmap.eq(1.0)
+        pos_mask = target_heatmap.ge(0.999)
         neg_mask = ~pos_mask
 
         # Positive loss

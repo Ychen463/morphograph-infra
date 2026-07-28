@@ -444,7 +444,7 @@ def make_gaussian_heatmap(
             heatmap[ri, ci] = 1.0
     if heatmap.any():
         heatmap = ndimage.gaussian_filter(heatmap, sigma=sigma)
-        heatmap = heatmap / (heatmap.max() + 1e-8)
+        heatmap = heatmap / heatmap.max()
     return heatmap
 
 
