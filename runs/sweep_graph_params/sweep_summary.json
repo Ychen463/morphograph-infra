@@ -1,0 +1,54 @@
+{
+  "n_images": 100,
+  "mode": "one_at_a_time",
+  "defaults": {
+    "closing_radius": 1,
+    "spur_length": 3,
+    "min_component_px": 10,
+    "junction_merge_radius": 5,
+    "min_branch_length": 10
+  },
+  "n_configs": 25,
+  "best": {
+    "edge_f1_strict_mean": {
+      "value": 0.094734964287515,
+      "params": {
+        "closing_radius": 1,
+        "spur_length": 5,
+        "min_component_px": 10,
+        "junction_merge_radius": 5,
+        "min_branch_length": 10
+      }
+    },
+    "edge_f1_relaxed_mean": {
+      "value": 0.21946335454637844,
+      "params": {
+        "closing_radius": 1,
+        "spur_length": 3,
+        "min_component_px": 10,
+        "junction_merge_radius": 3,
+        "min_branch_length": 10
+      }
+    },
+    "edge_f1_lenient_mean": {
+      "value": 0.26778864311525014,
+      "params": {
+        "closing_radius": 1,
+        "spur_length": 3,
+        "min_component_px": 10,
+        "junction_merge_radius": 3,
+        "min_branch_length": 10
+      }
+    },
+    "edge_f1_soft_mean": {
+      "value": 0.2496022736513272,
+      "params": {
+        "closing_radius": 1,
+        "spur_length": 3,
+        "min_component_px": 10,
+        "junction_merge_radius": 3,
+        "min_branch_length": 10
+      }
+    }
+  }
+}

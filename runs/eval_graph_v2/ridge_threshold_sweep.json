@@ -1,0 +1,32 @@
+{
+  "0.1": {
+    "mean_edge_f1": 0.0,
+    "mean_ep_f1": 0.0,
+    "n_images": 45
+  },
+  "0.2": {
+    "mean_edge_f1": 0.0,
+    "mean_ep_f1": 0.0,
+    "n_images": 45
+  },
+  "0.3": {
+    "mean_edge_f1": 0.0,
+    "mean_ep_f1": 0.0,
+    "n_images": 45
+  },
+  "0.4": {
+    "mean_edge_f1": 0.00722222202006945,
+    "mean_ep_f1": 0.0,
+    "n_images": 45
+  },
+  "0.5": {
+    "mean_edge_f1": 0.0029629628641975343,
+    "mean_ep_f1": 0.0,
+    "n_images": 45
+  },
+  "0.6": {
+    "mean_edge_f1": 0.0024691356968449974,
+    "mean_ep_f1": 0.0,
+    "n_images": 45
+  }
+}
