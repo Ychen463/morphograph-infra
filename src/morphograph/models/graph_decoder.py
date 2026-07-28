@@ -53,25 +53,30 @@ class NodeHeatmapHead(nn.Module):
 def extract_nodes(
     heatmap: torch.Tensor,
     threshold: float = 0.3,
-    nms_radius: int = 3,
+    nms_radius: int = 2,
     max_nodes: int = 50,
+    refine: bool = True,
 ) -> list[DetectedNodes]:
-    """Extract node coordinates from heatmap via NMS.
+    """Extract node coordinates from heatmap via NMS + sub-pixel refinement.
 
     Args:
         heatmap: (B, 2, H, W) after sigmoid.
         threshold: minimum score to keep.
-        nms_radius: max-pool kernel for NMS.
+        nms_radius: max-pool kernel radius for NMS.
         max_nodes: maximum nodes per image.
+        refine: if True, apply weighted-centroid sub-pixel refinement.
 
     Returns:
         List of DetectedNodes, one per batch element.
     """
+    # Cast to float32 — AMP may produce float16 where the equality
+    # check (heatmap == pooled) fails due to reduced precision.
+    heatmap = heatmap.float()
+
     B, C, H, W = heatmap.shape
     assert C == 2
 
     kernel = 2 * nms_radius + 1
-    # NMS: keep pixel if it equals its local maximum
     pooled = F.max_pool2d(heatmap, kernel_size=kernel, stride=1, padding=nms_radius)
     is_peak = (heatmap == pooled) & (heatmap > threshold)
 
@@ -84,7 +89,13 @@ def extract_nodes(
             peaks = is_peak[b, c].nonzero(as_tuple=False)  # (K, 2) [row, col]
             if len(peaks) > 0:
                 peak_scores = heatmap[b, c, peaks[:, 0], peaks[:, 1]]
-                coords_list.append(peaks.float())
+
+                if refine:
+                    refined = _refine_peaks(heatmap[b, c], peaks)
+                else:
+                    refined = peaks.float()
+
+                coords_list.append(refined)
                 types_list.append(torch.full((len(peaks),), c, device=heatmap.device))
                 scores_list.append(peak_scores)
 
@@ -93,7 +104,6 @@ def extract_nodes(
             all_types = torch.cat(types_list, dim=0)
             all_scores = torch.cat(scores_list, dim=0)
 
-            # Keep top-k by score
             if len(all_coords) > max_nodes:
                 topk = all_scores.topk(max_nodes)
                 all_coords = all_coords[topk.indices]
@@ -113,6 +123,35 @@ def extract_nodes(
             ))
 
     return results
+
+
+def _refine_peaks(
+    channel_hm: torch.Tensor,
+    peaks: torch.Tensor,
+    radius: int = 2,
+) -> torch.Tensor:
+    """Weighted-centroid sub-pixel refinement around each NMS peak.
+
+    Reduces coordinate quantization error from the 512→128→512 round-trip.
+    """
+    H, W = channel_hm.shape
+    refined = []
+    for peak in peaks:
+        r, c = int(peak[0].item()), int(peak[1].item())
+        r0, r1 = max(0, r - radius), min(H, r + radius + 1)
+        c0, c1 = max(0, c - radius), min(W, c + radius + 1)
+        patch = channel_hm[r0:r1, c0:c1]
+        total = patch.sum()
+        if total < 1e-8:
+            refined.append([float(r), float(c)])
+            continue
+        rr = torch.arange(r0, r1, device=channel_hm.device).float()
+        cc = torch.arange(c0, c1, device=channel_hm.device).float()
+        grid_r, grid_c = torch.meshgrid(rr, cc, indexing="ij")
+        wr = (patch * grid_r).sum() / total
+        wc = (patch * grid_c).sum() / total
+        refined.append([wr.item(), wc.item()])
+    return torch.tensor(refined, device=channel_hm.device)
 
 
 def _sample_path_evidence(

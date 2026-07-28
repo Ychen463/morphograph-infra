@@ -98,7 +98,7 @@ def extract_graph_d(
     model,
     outputs: dict[str, torch.Tensor],
     node_threshold: float = 0.3,
-    nms_radius: int = 3,
+    nms_radius: int = 2,
     max_nodes: int = 50,
     knn_k: int = 8,
     edge_threshold: float = 0.5,
