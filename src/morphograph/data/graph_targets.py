@@ -422,6 +422,32 @@ def build_graph(
     )
 
 
+def make_gaussian_heatmap(
+    coords: np.ndarray,
+    shape: tuple[int, int] = (128, 128),
+    sigma: float = 1.5,
+) -> np.ndarray:
+    """Gaussian heatmap with peak=1.0 at each coordinate.
+
+    Args:
+        coords: (N, 2) array of (row, col) in target space.
+        shape: output spatial size.
+        sigma: Gaussian kernel sigma.
+
+    Returns:
+        (H, W) float32 heatmap, max-normalized to [0, 1].
+    """
+    heatmap = np.zeros(shape, dtype=np.float32)
+    for r, c in coords:
+        ri, ci = int(round(r)), int(round(c))
+        if 0 <= ri < shape[0] and 0 <= ci < shape[1]:
+            heatmap[ri, ci] = 1.0
+    if heatmap.any():
+        heatmap = ndimage.gaussian_filter(heatmap, sigma=sigma)
+        heatmap = heatmap / (heatmap.max() + 1e-8)
+    return heatmap
+
+
 def mask_to_graph(
     binary_mask: np.ndarray,
     min_branch_length: int = 10,

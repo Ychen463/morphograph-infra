@@ -2,15 +2,19 @@
 
 NodeHeatmapLoss: CenterNet-style modified focal loss for heatmaps.
 EdgeBCELoss: focal BCE with hard negative mining for edge classification.
+build_edge_labels: Hungarian-matched three-state edge label assignment.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from scipy.optimize import linear_sum_assignment
+from scipy.spatial.distance import cdist
 
 from morphograph.losses.composite import LossSchedule
 
@@ -143,6 +147,97 @@ class EdgeBCELoss(nn.Module):
 
         loss = alpha_t * focal_weight * bce * sample_weight * per_edge_w
         return loss.sum() / per_edge_w.sum().clamp(min=1.0)
+
+
+def build_edge_labels(
+    pred_coords: torch.Tensor,
+    pred_types: torch.Tensor,
+    gt_coords: torch.Tensor,
+    gt_types: torch.Tensor,
+    gt_edges: list[tuple[int, int]],
+    candidate_pairs: torch.Tensor,
+    max_match_dist: float = 2.5,
+    type_match_strict: bool = True,
+    unmatched_far_threshold: float = 5.0,
+    unmatched_neg_weight: float = 0.3,
+) -> tuple[torch.Tensor, torch.Tensor, dict[int, int]]:
+    """Assign edge labels via type-aware Hungarian matching.
+
+    All coordinates are in 128-space. max_match_dist=2.5 corresponds
+    to 10px in 512-space (2.5 * 4 = 10), matching the relaxed eval
+    tolerance. For stricter training, use 1.25 (= 5px in 512-space).
+
+    Three-state label assignment:
+      - Both endpoints matched: label from GT adjacency (pos/neg), weight=1.0
+      - Clearly unmatched (min dist to GT > unmatched_far_threshold):
+        negative edge, weight=unmatched_neg_weight
+      - Near matching threshold (ambiguous): IGNORE (weight=0.0)
+
+    Returns:
+        labels: (E,) binary labels (0/1).
+        loss_weight: (E,) per-edge loss weights (0=ignore, 0.3=unmatched neg, 1.0=matched).
+        pred_to_gt: dict mapping pred node idx -> GT node idx.
+    """
+    device = pred_coords.device
+    E = len(candidate_pairs)
+    labels = torch.zeros(E, device=device)
+    loss_weight = torch.zeros(E, device=device)
+    pred_to_gt: dict[int, int] = {}
+
+    if len(pred_coords) == 0 or len(gt_coords) == 0:
+        return labels, loss_weight, pred_to_gt
+
+    pc = pred_coords.detach().cpu().numpy()
+    gc = gt_coords.detach().cpu().numpy()
+    pt = pred_types.detach().cpu().numpy()
+    gt = gt_types.detach().cpu().numpy()
+
+    dists = cdist(pc, gc)
+
+    if type_match_strict:
+        type_mismatch = (pt[:, None].astype(int) != gt[None, :].astype(int))
+        cost = dists.copy()
+        cost[type_mismatch] = 1e6
+    else:
+        type_mismatch = np.abs(pt[:, None].astype(float) - gt[None, :].astype(float))
+        cost = dists + 5.0 * type_mismatch
+
+    row_ind, col_ind = linear_sum_assignment(cost)
+    for r, c in zip(row_ind, col_ind):
+        if dists[r, c] <= max_match_dist:
+            pred_to_gt[int(r)] = int(c)
+
+    min_dist_to_gt = dists.min(axis=1)
+    is_clearly_unmatched = {}
+    for i in range(len(pc)):
+        if i not in pred_to_gt:
+            is_clearly_unmatched[i] = min_dist_to_gt[i] > unmatched_far_threshold
+
+    gt_edge_set = set()
+    for a, b in gt_edges:
+        gt_edge_set.add((min(a, b), max(a, b)))
+
+    for e_idx in range(E):
+        a, b = candidate_pairs[e_idx].tolist()
+        a_matched = a in pred_to_gt
+        b_matched = b in pred_to_gt
+
+        if a_matched and b_matched:
+            loss_weight[e_idx] = 1.0
+            mapped = (
+                min(pred_to_gt[a], pred_to_gt[b]),
+                max(pred_to_gt[a], pred_to_gt[b]),
+            )
+            if mapped in gt_edge_set:
+                labels[e_idx] = 1.0
+        elif (not a_matched and is_clearly_unmatched.get(a, False)) or \
+             (not b_matched and is_clearly_unmatched.get(b, False)):
+            labels[e_idx] = 0.0
+            loss_weight[e_idx] = unmatched_neg_weight
+        else:
+            loss_weight[e_idx] = 0.0
+
+    return labels, loss_weight, pred_to_gt
 
 
 @dataclass

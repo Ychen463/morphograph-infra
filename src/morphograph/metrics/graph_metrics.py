@@ -57,6 +57,99 @@ class GraphMetrics:
     edge_f1_soft: float = 0.0
 
 
+def approx_graph_edit_distance(
+    pred_num_nodes: int,
+    pred_num_edges: int,
+    gt_num_nodes: int,
+    gt_num_edges: int,
+) -> float:
+    """Approximate GED: (node ins + del + edge ins + del) / GT size."""
+    gt_size = gt_num_nodes + gt_num_edges
+    if gt_size == 0:
+        return 0.0 if pred_num_nodes + pred_num_edges == 0 else 1.0
+    node_diff = abs(pred_num_nodes - gt_num_nodes)
+    edge_diff = abs(pred_num_edges - gt_num_edges)
+    return (node_diff + edge_diff) / gt_size
+
+
+def path_continuity(
+    pred_nodes: np.ndarray,
+    pred_edges: list[tuple[int, int]],
+    gt_nodes: np.ndarray,
+    gt_edges: list[tuple[int, int]],
+    tolerance_px: float = DEFAULT_KEYPOINT_TOLERANCE_PX,
+) -> float:
+    """Fraction of GT edges whose matched pred nodes are connected."""
+    if len(gt_edges) == 0:
+        return 1.0
+    if len(pred_nodes) == 0 or len(gt_nodes) == 0:
+        return 0.0
+
+    dists = cdist(gt_nodes, pred_nodes)
+    row_ind, col_ind = linear_sum_assignment(dists)
+    gt_to_pred = {}
+    for r, c in zip(row_ind, col_ind):
+        if dists[r, c] <= tolerance_px:
+            gt_to_pred[r] = c
+
+    adj: dict[int, set[int]] = {i: set() for i in range(len(pred_nodes))}
+    for a, b in pred_edges:
+        adj[a].add(b)
+        adj[b].add(a)
+
+    def connected(src: int, dst: int) -> bool:
+        if src == dst:
+            return True
+        visited = {src}
+        queue = [src]
+        while queue:
+            node = queue.pop(0)
+            for nb in adj.get(node, set()):
+                if nb == dst:
+                    return True
+                if nb not in visited:
+                    visited.add(nb)
+                    queue.append(nb)
+        return False
+
+    continuous = 0
+    for a, b in gt_edges:
+        if a in gt_to_pred and b in gt_to_pred:
+            if connected(gt_to_pred[a], gt_to_pred[b]):
+                continuous += 1
+
+    return continuous / len(gt_edges)
+
+
+def degree_distribution_kl(
+    pred_edges: list[tuple[int, int]],
+    pred_num_nodes: int,
+    gt_edges: list[tuple[int, int]],
+    gt_num_nodes: int,
+    max_degree: int = 6,
+) -> float:
+    """KL divergence between predicted and GT node degree histograms."""
+    def _degree_hist(edges, num_nodes):
+        if num_nodes == 0:
+            return np.ones(max_degree + 1) / (max_degree + 1)
+        degrees = np.zeros(num_nodes, dtype=int)
+        for a, b in edges:
+            if a < num_nodes:
+                degrees[a] += 1
+            if b < num_nodes:
+                degrees[b] += 1
+        hist = np.zeros(max_degree + 1, dtype=float)
+        for d in degrees:
+            hist[min(d, max_degree)] += 1
+        hist = (hist + 1e-6)
+        hist = hist / hist.sum()
+        return hist
+
+    p = _degree_hist(gt_edges, gt_num_nodes)
+    q = _degree_hist(pred_edges, pred_num_nodes)
+    return float(np.sum(p * np.log(p / q)))
+
+
 def _keypoint_prf(
     pred: np.ndarray,
     target: np.ndarray,
