@@ -858,9 +858,10 @@ def main() -> None:
                 sig = ""
                 if wt["p_value"] is not None:
                     sig = " ***" if wt["p_value"] < 0.001 else " **" if wt["p_value"] < 0.01 else " *" if wt["p_value"] < 0.05 else ""
+                p_str = f"{wt['p_value']:.4f}" if wt["p_value"] is not None else "N/A"
                 print(
                     f"  {key:30s}: diff={wt.get('mean_diff', 0):.4f}, "
-                    f"p={wt['p_value']:.4f if wt['p_value'] is not None else 'N/A'}{sig}"
+                    f"p={p_str}{sig}"
                 )
         print()
 
