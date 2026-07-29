@@ -75,6 +75,8 @@ def parse_args():
     parser.add_argument("--nms-radius", type=int, default=2)
     parser.add_argument("--max-nodes", type=int, default=50)
     parser.add_argument("--heatmap-sigma", type=float, default=1.0)
+    parser.add_argument("--loss-pos-threshold", type=float, default=0.999)
+    parser.add_argument("--loss-beta", type=float, default=4.0)
     parser.add_argument("--knn-k", type=int, default=8)
     parser.add_argument("--overfit", type=int, default=0)
     return parser.parse_args()
@@ -389,7 +391,9 @@ def main() -> None:
     # -- Losses --
     seg_loss_fn = WeightedCEDiceLoss(class_weights=DEFAULT_CE_WEIGHTS, ignore_index=255).to(device)
     skel_loss_fn = DTRegressionLoss(loss_type="mse").to(device)
-    node_loss_fn = NodeHeatmapLoss().to(device)
+    node_loss_fn = NodeHeatmapLoss(
+        beta=args.loss_beta, pos_threshold=args.loss_pos_threshold,
+    ).to(device)
     edge_loss_fn = EdgeBCELoss().to(device)
     node_schedule = LossSchedule(weight=args.node_weight, start_epoch=0, ramp_epochs=args.node_ramp_epochs)
     edge_schedule = LossSchedule(weight=args.edge_weight, start_epoch=args.edge_start_epoch, ramp_epochs=args.edge_ramp_epochs)

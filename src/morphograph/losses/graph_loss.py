@@ -26,13 +26,24 @@ class NodeHeatmapLoss(nn.Module):
     Negative pixels: -(1-Y)^beta * p^alpha * log(1-p)
     where Y = Gaussian GT heatmap value.
 
-    Handles ~10-30 positive pixels per 16K map naturally.
+    Args:
+        alpha: focal exponent for both pos and neg terms.
+        beta: Gaussian-distance penalty exponent for negative pixels.
+        pos_threshold: GT heatmap value above which a pixel is positive.
+            Default 0.999 (peak-only). Lower values (e.g. 0.5) include
+            more pixels per node, reducing pos/neg imbalance.
     """
 
-    def __init__(self, alpha: float = 2.0, beta: float = 4.0) -> None:
+    def __init__(
+        self,
+        alpha: float = 2.0,
+        beta: float = 4.0,
+        pos_threshold: float = 0.999,
+    ) -> None:
         super().__init__()
         self.alpha = alpha
         self.beta = beta
+        self.pos_threshold = pos_threshold
 
     def forward(
         self,
@@ -50,7 +61,7 @@ class NodeHeatmapLoss(nn.Module):
         pred = torch.sigmoid(pred_logits)
         pred = pred.clamp(1e-6, 1.0 - 1e-6)
 
-        pos_mask = target_heatmap.ge(0.999)
+        pos_mask = target_heatmap.ge(self.pos_threshold)
         neg_mask = ~pos_mask
 
         # Positive loss
