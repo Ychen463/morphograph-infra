@@ -451,6 +451,10 @@ def main() -> None:
                 history[f"val_jn_f1@{t}px"].append(val_metrics[f"jn_f1@{t}px"])
                 history[f"val_edge_f1@{t}px"].append(val_metrics[f"edge_f1@{t}px"])
                 history[f"val_edge_gt_f1@{t}px"].append(val_metrics[f"edge_gt_f1@{t}px"])
+            for diag_key in ["avg_pred_nodes", "avg_gt_nodes", "gt_hm_mean",
+                              "gt_hm_median", "gt_hm_below_0.3", "gt_hm_below_0.1"]:
+                if diag_key in val_metrics:
+                    history[f"val_{diag_key}"].append(val_metrics[diag_key])
 
         # Checkpoint
         if do_nodes:
