@@ -58,21 +58,25 @@ class NodeHeatmapLoss(nn.Module):
         Returns:
             Scalar loss.
         """
+        # Numerically stable: use logsigmoid instead of log(sigmoid)
+        # log(p) = logsigmoid(x), log(1-p) = logsigmoid(-x)
+        log_p = F.logsigmoid(pred_logits)      # log(sigmoid(x))
+        log_1mp = F.logsigmoid(-pred_logits)    # log(1 - sigmoid(x))
         pred = torch.sigmoid(pred_logits)
         pred = pred.clamp(1e-6, 1.0 - 1e-6)
 
         pos_mask = target_heatmap.ge(self.pos_threshold)
         neg_mask = ~pos_mask
 
-        # Positive loss
-        pos_loss = -((1.0 - pred) ** self.alpha) * torch.log(pred)
+        # Positive loss: -(1-p)^alpha * log(p)
+        pos_loss = -((1.0 - pred) ** self.alpha) * log_p
         pos_loss = pos_loss * pos_mask.float()
 
         # Negative loss with Gaussian-weighted penalty reduction
         neg_loss = (
             -((1.0 - target_heatmap) ** self.beta)
             * (pred ** self.alpha)
-            * torch.log(1.0 - pred)
+            * log_1mp
         )
         neg_loss = neg_loss * neg_mask.float()
 
