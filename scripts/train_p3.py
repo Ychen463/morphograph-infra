@@ -71,7 +71,7 @@ def parse_args():
     parser.add_argument("--edge-ramp-epochs", type=int, default=10)
     parser.add_argument("--ss-warmup", type=int, default=10)
     parser.add_argument("--ss-anneal-end", type=int, default=60)
-    parser.add_argument("--node-threshold", type=float, default=0.1)
+    parser.add_argument("--node-threshold", type=float, default=0.3)
     parser.add_argument("--nms-radius", type=int, default=2)
     parser.add_argument("--max-nodes", type=int, default=50)
     parser.add_argument("--heatmap-sigma", type=float, default=1.0)
@@ -194,6 +194,9 @@ def validate(model, val_loader, args, do_nodes, do_edges, device):
     val_jn_f1s = {t: [] for t in [5, 10, 15]}
     val_edge_f1s = {t: [] for t in [5, 10, 15]}
     val_edge_gt_f1s = {t: [] for t in [5, 10, 15]}  # Edge F1 using GT nodes
+    val_n_pred, val_n_gt = [], []
+    val_pred_scores = []  # Detected peak scores
+    val_gt_hm_vals = []  # Heatmap values at GT node positions
 
     for batch in val_loader:
         images = batch["image"].to(device)
@@ -220,6 +223,20 @@ def validate(model, val_loader, args, do_nodes, do_edges, device):
                 hm[b_idx:b_idx+1], threshold=args.node_threshold,
                 nms_radius=args.nms_radius, max_nodes=args.max_nodes,
             )[0]
+
+            val_n_pred.append(len(detected.coords))
+            val_n_gt.append(len(gt_coords))
+            if len(detected.scores) > 0:
+                val_pred_scores.extend(detected.scores.cpu().tolist())
+
+            # Diagnostic: heatmap values at GT node positions
+            hm_b = hm[b_idx]  # (2, H, W)
+            for ni in range(len(gt_coords)):
+                r, c = int(round(gt_coords[ni, 0].item())), int(round(gt_coords[ni, 1].item()))
+                ch = int(gt_types[ni].item())
+                r = max(0, min(r, hm_b.shape[1] - 1))
+                c = max(0, min(c, hm_b.shape[2] - 1))
+                val_gt_hm_vals.append(hm_b[ch, r, c].item())
 
             pred_coords_512 = detected.coords.cpu().numpy() * 4.0
             gt_coords_512 = gt_coords.numpy() * 4.0
@@ -298,6 +315,17 @@ def validate(model, val_loader, args, do_nodes, do_edges, device):
             metrics[f"jn_f1@{t}px"] = float(np.mean(val_jn_f1s[t])) if val_jn_f1s[t] else 0.0
             metrics[f"edge_f1@{t}px"] = float(np.mean(val_edge_f1s[t])) if val_edge_f1s[t] else 0.0
             metrics[f"edge_gt_f1@{t}px"] = float(np.mean(val_edge_gt_f1s[t])) if val_edge_gt_f1s[t] else 0.0
+    if do_nodes and val_n_pred:
+        metrics["avg_pred_nodes"] = float(np.mean(val_n_pred))
+        metrics["avg_gt_nodes"] = float(np.mean(val_n_gt))
+        if val_pred_scores:
+            metrics["pred_score_mean"] = float(np.mean(val_pred_scores))
+        if val_gt_hm_vals:
+            gt_vals = np.array(val_gt_hm_vals)
+            metrics["gt_hm_mean"] = float(gt_vals.mean())
+            metrics["gt_hm_median"] = float(np.median(gt_vals))
+            metrics["gt_hm_below_0.3"] = float((gt_vals < 0.3).mean())
+            metrics["gt_hm_below_0.1"] = float((gt_vals < 0.1).mean())
     return metrics
 
 
@@ -446,8 +474,12 @@ def main() -> None:
         loss_str = " ".join(f"{k}={v:.4f}" for k, v in avgs.items())
         graph_str = ""
         if do_nodes:
+            ap = val_metrics.get('avg_pred_nodes', 0)
+            ag = val_metrics.get('avg_gt_nodes', 0)
+            gt_below = val_metrics.get('gt_hm_below_0.3', 0)
             graph_str = (f"nF1@5={val_metrics['node_f1@5px']:.3f}"
-                         f"(ep={val_metrics['ep_f1@5px']:.3f},jn={val_metrics['jn_f1@5px']:.3f})")
+                         f"(ep={val_metrics['ep_f1@5px']:.3f},jn={val_metrics['jn_f1@5px']:.3f})"
+                         f" n={ap:.0f}/{ag:.0f} gt<0.3={gt_below:.0%}")
         if do_edges:
             graph_str += (f" eF1@5={val_metrics['edge_f1@5px']:.3f}"
                           f" eF1_gt@5={val_metrics['edge_gt_f1@5px']:.3f}")
