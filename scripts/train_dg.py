@@ -45,6 +45,18 @@ from morphograph.training.utils import (
 # Dataset
 # ---------------------------------------------------------------------------
 
+TIER_TO_DOMAIN = {"Easy": 0, "Medium": 1, "Hard": 2}
+
+
+def path_to_domain_id(img_path: Path) -> int:
+    """Extract pseudo-domain ID from DamSegment image path (difficulty tier)."""
+    parts = img_path.parts
+    for part in parts:
+        if part in TIER_TO_DOMAIN:
+            return TIER_TO_DOMAIN[part]
+    return 0  # default (e.g., s2ds)
+
+
 class DamSegmentDTDataset(Dataset):
     """DamSegment dataset with DT targets. Handles both RGB and indexed masks."""
 
@@ -104,6 +116,7 @@ class DamSegmentDTDataset(Dataset):
             "mask": torch.from_numpy(mask.copy()).long(),
             "dt_target": torch.from_numpy(dt_target.copy()).float().unsqueeze(0),
             "crack_mask": torch.from_numpy(crack_binary.copy()).float().unsqueeze(0),
+            "domain_id": path_to_domain_id(img_path),
         }
 
 
@@ -163,6 +176,14 @@ def main():
     parser.add_argument("--mixstyle-alpha", type=float, default=0.1, help="MixStyle Beta dist alpha")
     parser.add_argument("--mixstyle-stages", type=int, nargs="+", default=[0, 1],
                         help="Encoder stages to apply MixStyle (0-indexed)")
+    # CORAL
+    parser.add_argument("--coral", action="store_true", help="Enable CORAL alignment")
+    parser.add_argument("--coral-weight", type=float, default=1.0, help="CORAL loss weight")
+    parser.add_argument("--coral-stage", type=int, default=2, help="Encoder stage for CORAL")
+    # DANN
+    parser.add_argument("--dann", action="store_true", help="Enable DANN adversarial training")
+    parser.add_argument("--dann-weight", type=float, default=0.1, help="DANN loss weight")
+    parser.add_argument("--dann-stage", type=int, default=2, help="Encoder stage for DANN")
     args = parser.parse_args()
 
     set_seed(args.seed)
@@ -209,16 +230,31 @@ def main():
         fpn_dim=256, heads=heads,
     ).to(device)
 
-    # MixStyle
+    # DG methods
     dg_method = "ERM"
+    coral_reg = None
+    dann_reg = None
+
     if args.mixstyle:
         from morphograph.models.mixstyle import apply_mixstyle_hooks
-        handles = apply_mixstyle_hooks(
+        apply_mixstyle_hooks(
             model.encoder, stages=tuple(args.mixstyle_stages),
             p=args.mixstyle_p, alpha=args.mixstyle_alpha,
         )
         dg_method = "MixStyle"
         print(f"MixStyle enabled: stages={args.mixstyle_stages}, p={args.mixstyle_p}, alpha={args.mixstyle_alpha}")
+
+    if args.coral:
+        from morphograph.models.coral import CORALRegularizer
+        coral_reg = CORALRegularizer(stage=args.coral_stage).to(device)
+        dg_method = "CORAL" if dg_method == "ERM" else f"{dg_method}+CORAL"
+        print(f"CORAL enabled: stage={args.coral_stage}, weight={args.coral_weight}")
+
+    if args.dann:
+        from morphograph.models.dann import DANNRegularizer
+        dann_reg = DANNRegularizer(stage=args.dann_stage, num_domains=3).to(device)
+        dg_method = "DANN" if dg_method == "ERM" else f"{dg_method}+DANN"
+        print(f"DANN enabled: stage={args.dann_stage}, weight={args.dann_weight}")
 
     param_counts = model.count_parameters()
     print(f"Parameters: {param_counts['total']:,}")
@@ -227,6 +263,8 @@ def main():
 
     # Optimizer
     param_groups = model.get_param_groups(encoder_lr=args.encoder_lr, head_lr=args.head_lr)
+    if dann_reg is not None:
+        param_groups.append({"params": dann_reg.parameters(), "lr": args.head_lr})
     optimizer = torch.optim.AdamW(param_groups, weight_decay=args.weight_decay)
     scheduler = make_cosine_schedule(
         optimizer, len(train_loader) * args.epochs, len(train_loader) * args.warmup_epochs,
@@ -249,11 +287,21 @@ def main():
         model.train()
         epoch_losses = defaultdict(list)
 
+        need_hidden = coral_reg is not None or dann_reg is not None
+        # Capture hidden states via hook if needed
+        captured_hidden = [None]
+        if need_hidden and not hasattr(model, "_dg_hook"):
+            def capture_hook(module, input, output):
+                captured_hidden[0] = list(output.hidden_states)
+                return output
+            model._dg_hook = model.encoder.register_forward_hook(capture_hook)
+
         for batch in train_loader:
             images = batch["image"].to(device)
             masks = batch["mask"].to(device)
             dt_targets = batch["dt_target"].to(device)
             crack_masks = batch["crack_mask"].to(device)
+            domain_ids = batch["domain_id"].to(device) if need_hidden else None
 
             with torch.amp.autocast("cuda", enabled=args.amp and device.type == "cuda"):
                 outputs = model(images)
@@ -265,6 +313,17 @@ def main():
                     skel_loss = skel_loss_fn(skel_pred, dt_targets, torch.ones_like(crack_masks))
                     total_loss = total_loss + skel_schedule.effective_weight(epoch) * skel_loss
                     epoch_losses["skel"].append(skel_loss.item())
+
+                # CORAL/DANN losses (use captured hidden states)
+                if coral_reg is not None and captured_hidden[0] is not None:
+                    c_loss = coral_reg(captured_hidden[0], domain_ids)
+                    total_loss = total_loss + args.coral_weight * c_loss
+                    epoch_losses["coral"].append(c_loss.item())
+
+                if dann_reg is not None and captured_hidden[0] is not None:
+                    d_loss = dann_reg(captured_hidden[0], domain_ids, epoch, args.epochs)
+                    total_loss = total_loss + args.dann_weight * d_loss
+                    epoch_losses["dann"].append(d_loss.item())
 
             optimizer.zero_grad()
             scaler.scale(total_loss).backward()
@@ -344,6 +403,16 @@ def main():
             "alpha": args.mixstyle_alpha,
             "stages": args.mixstyle_stages,
         } if args.mixstyle else None,
+        "coral": {
+            "enabled": args.coral,
+            "weight": args.coral_weight,
+            "stage": args.coral_stage,
+        } if args.coral else None,
+        "dann": {
+            "enabled": args.dann,
+            "weight": args.dann_weight,
+            "stage": args.dann_stage,
+        } if args.dann else None,
     }
     with open(args.output / "summary.json", "w") as f:
         json.dump(summary, f, indent=2)
@@ -355,7 +424,7 @@ def main():
         import matplotlib.pyplot as plt
 
         fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-        for k in ["seg", "skel", "total"]:
+        for k in ["seg", "skel", "coral", "dann", "total"]:
             if f"train_{k}" in history:
                 axes[0].plot(history[f"train_{k}"], label=k)
         axes[0].set_title("Train Loss"); axes[0].legend(); axes[0].grid(True, alpha=0.3)
