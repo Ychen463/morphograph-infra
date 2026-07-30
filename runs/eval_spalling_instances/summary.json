@@ -1,0 +1,18 @@
+{
+  "checkpoint": "runs/B2_dt_v5/best.pt",
+  "iou_threshold": 0.5,
+  "min_area_px": 25,
+  "n_val_images": 225,
+  "n_images_with_gt_spalling": 54,
+  "n_images_with_instances": 71,
+  "total_gt_instances": 70,
+  "total_pred_instances": 71,
+  "micro_precision": 0.5633802816901409,
+  "micro_recall": 0.5714285714285714,
+  "micro_f1": 0.5673758865248227,
+  "macro_precision": 0.4953051643192488,
+  "macro_recall": 0.4835680751173708,
+  "macro_f1": 0.48169014084507034,
+  "mean_matched_iou": 0.4313886751861257,
+  "mean_semantic_iou": 0.42881866676435937
+}
