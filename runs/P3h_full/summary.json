@@ -1,0 +1,15 @@
+{
+  "phase": "P3h",
+  "best_miou_fg": 0.6704624961872885,
+  "best_node_f1_5px": null,
+  "best_edge_gt_f1_10px": 0.6594294846846632,
+  "final_val_node_f1_5px": 0.2843085604806825,
+  "final_val_ep_f1_5px": 0.28161071604554117,
+  "final_val_jn_f1_5px": 0.40935518229871654,
+  "final_val_edge_f1_10px": 0.18342508108048639,
+  "final_val_edge_gt_f1_10px": 0.6544067661846864,
+  "epochs": 100,
+  "total_params": 28261447,
+  "overfit": 0,
+  "train_samples": 1275
+}
