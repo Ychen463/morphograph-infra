@@ -79,17 +79,14 @@ def load_model(checkpoint_path: Path, device: torch.device):
             fpn_dim=FPN_DIM, graph_heads=True,
         )
     else:
-        from morphograph.models.morphograph_net import MorphoAuxNet, FPN_DIM, BASELINE_HEADS
-        # Detect which heads are present
-        head_names = set()
-        for k in state:
-            for h in BASELINE_HEADS.get("B5", []):
-                if h in k:
-                    head_names.add(h)
-        has_skel = any("skeleton" in k for k in state)
+        from morphograph.models.morphograph_net import MorphoAuxNet, FPN_DIM
+        # Detect which heads are present from state dict
+        head_flags = {}
+        for name in ["seg", "skeleton", "endpoints", "junctions", "width"]:
+            head_flags[name] = any(name in k for k in state)
         model = MorphoAuxNet(
             backbone="mit_b2", num_classes=NUM_CLASSES,
-            fpn_dim=FPN_DIM, head_names=BASELINE_HEADS.get("B2", ["seg", "skeleton"]),
+            fpn_dim=FPN_DIM, heads=head_flags,
         )
 
     model.load_state_dict(state, strict=False)
