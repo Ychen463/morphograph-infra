@@ -1,0 +1,82 @@
+[
+  {
+    "label": "B0",
+    "damsegment": {
+      "dataset": "damsegment_val",
+      "n_images": 225,
+      "iou_background": 0.9725566735453874,
+      "dice_background": 0.9860084588448321,
+      "iou_crack": 0.5311811823534661,
+      "dice_crack": 0.6759819042716377,
+      "iou_spalling": 0.1580294920992785,
+      "dice_spalling": 0.171507892967075,
+      "mIoU_fg": 0.3446053372263723,
+      "mIoU_all": 0.5539224493327107,
+      "bf1_crack": 0.6091299573920269,
+      "bf1_spalling": 0.5335438188947988,
+      "inst_micro_f1": 0.7076923076923077,
+      "inst_n_gt_total": 70,
+      "inst_n_pred_total": 60,
+      "model": "B0"
+    },
+    "s2ds": {
+      "dataset": "s2ds",
+      "n_images": 743,
+      "iou_background": 0.9259223981174954,
+      "dice_background": 0.9511168794809668,
+      "iou_crack": 0.044179251510057235,
+      "dice_crack": 0.07536984465756526,
+      "iou_spalling": 0.08154130267383868,
+      "dice_spalling": 0.09819865607396282,
+      "mIoU_fg": 0.06286027709194796,
+      "mIoU_all": 0.3505476507671304,
+      "bf1_crack": 0.21224761010968607,
+      "bf1_spalling": 0.10478113335348688,
+      "inst_micro_f1": 0.16386554621848737,
+      "inst_n_gt_total": 445,
+      "inst_n_pred_total": 507,
+      "model": "B0"
+    },
+    "domain_gap_miou_fg": 0.28174506013442435
+  },
+  {
+    "label": "B2",
+    "damsegment": {
+      "dataset": "damsegment_val",
+      "n_images": 225,
+      "iou_background": 0.9729177666327077,
+      "dice_background": 0.9861909068793484,
+      "iou_crack": 0.529743345825463,
+      "dice_crack": 0.6746522915927946,
+      "iou_spalling": 0.16510131470873532,
+      "dice_spalling": 0.179345334310576,
+      "mIoU_fg": 0.3474223302670992,
+      "mIoU_all": 0.5559208090556352,
+      "bf1_crack": 0.6184845275190742,
+      "bf1_spalling": 0.5944406476534999,
+      "inst_micro_f1": 0.7218045112781954,
+      "inst_n_gt_total": 70,
+      "inst_n_pred_total": 63,
+      "model": "B2"
+    },
+    "s2ds": {
+      "dataset": "s2ds",
+      "n_images": 743,
+      "iou_background": 0.9283656902544767,
+      "dice_background": 0.9523191099085944,
+      "iou_crack": 0.047009691530915075,
+      "dice_crack": 0.07937814047227819,
+      "iou_spalling": 0.08206721778876566,
+      "dice_spalling": 0.09868908836722126,
+      "mIoU_fg": 0.06453845465984037,
+      "mIoU_all": 0.35248086652471916,
+      "bf1_crack": 0.2254589937892237,
+      "bf1_spalling": 0.11284184458681351,
+      "inst_micro_f1": 0.1983663943990665,
+      "inst_n_gt_total": 445,
+      "inst_n_pred_total": 412,
+      "model": "B2"
+    },
+    "domain_gap_miou_fg": 0.2828838756072588
+  }
+]
