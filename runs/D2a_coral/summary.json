@@ -1,0 +1,28 @@
+{
+  "baseline": "B2",
+  "dg_method": "CORAL",
+  "best_miou_fg": 0.6656605659102923,
+  "final_damseg_miou_fg": 0.6656605659102923,
+  "final_damseg_per_class": {
+    "0": 0.9727793149501917,
+    "1": 0.5456046702053808,
+    "2": 0.7857164616152039
+  },
+  "final_s2ds_miou_fg": 0.13318371655346606,
+  "final_s2ds_per_class": {
+    "0": 0.9306211043882838,
+    "1": 0.06701950436689058,
+    "2": 0.1993479287400415
+  },
+  "domain_gap": 0.5324768493568263,
+  "epochs": 100,
+  "total_params": 27232900,
+  "seed": 42,
+  "mixstyle": null,
+  "coral": {
+    "enabled": true,
+    "weight": 1.0,
+    "stage": 2
+  },
+  "dann": null
+}
