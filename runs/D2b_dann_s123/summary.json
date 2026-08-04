@@ -1,0 +1,28 @@
+{
+  "baseline": "B2",
+  "dg_method": "DANN",
+  "best_miou_fg": 0.6660149685146526,
+  "final_damseg_miou_fg": 0.6660149685146526,
+  "final_damseg_per_class": {
+    "0": 0.9729511905226186,
+    "1": 0.5309675080482276,
+    "2": 0.8010624289810776
+  },
+  "final_s2ds_miou_fg": 0.10900356107395065,
+  "final_s2ds_per_class": {
+    "0": 0.9185793922592108,
+    "1": 0.04269975397956682,
+    "2": 0.17530736816833448
+  },
+  "domain_gap": 0.557011407440702,
+  "epochs": 100,
+  "total_params": 27232900,
+  "seed": 123,
+  "mixstyle": null,
+  "coral": null,
+  "dann": {
+    "enabled": true,
+    "weight": 0.1,
+    "stage": 2
+  }
+}
