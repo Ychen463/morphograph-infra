@@ -1,0 +1,11 @@
+{
+  "baseline": "B0",
+  "best_miou_fg": 0.6813073223497585,
+  "final_val_loss": 0.3880921830995041,
+  "epochs": 100,
+  "total_params": 27085251,
+  "trainable_params": 27085251,
+  "train_samples": 1275,
+  "val_samples": 225,
+  "seed": 7
+}
