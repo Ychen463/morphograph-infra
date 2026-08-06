@@ -107,7 +107,7 @@ def main():
                     "std_delta": float(np.std(diffs)),
                     "t_stat": float(t_stat),
                     "p_value": float(p_val),
-                    "significant": p_val < 0.05,
+                    "significant": bool(p_val < 0.05),
                 }
 
     output_path = args.output or args.runs_dir / "baseline_multiseed_summary.json"
