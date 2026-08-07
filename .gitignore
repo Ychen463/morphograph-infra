@@ -40,6 +40,9 @@ venv/
 *.swp
 *.swo
 
+# Paper (unpublished manuscript — do not track)
+paper/
+
 # OS
 .DS_Store
 Thumbs.db
