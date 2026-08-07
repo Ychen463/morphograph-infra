@@ -60,7 +60,7 @@ Our central finding is \textbf{negative}: no form of auxiliary morphological sup
 \begin{enumerate}
     \item Skeleton distance transform supervision appeared to improve mIoU\textsubscript{fg} by +1.0\% in a single seed, but multi-seed evaluation revealed a non-significant +0.5\%$\pm$0.3\% ($p=0.145$).
     \item clDice appeared to degrade performance by $-$1.6\% in a single seed, but multi-seed evaluation showed a non-significant +0.2\%$\pm$0.9\% ($p=0.822$).
-    \item MixStyle appeared to improve out-of-distribution performance by +52\% in a single seed, but multi-seed evaluation showed statistical equivalence to the ERM baseline ($p=0.878$).
+    \item MixStyle appeared to improve out-of-distribution performance by +52\% in a single seed, but multi-seed evaluation revealed no statistically significant difference from the ERM baseline ($p=0.878$).
 \end{enumerate}
 
 These results carry implications beyond our specific experimental setting. They suggest that the crack segmentation literature may contain a non-trivial number of fragile claims built on single-seed comparisons, and they underscore the need for multi-seed validation as a minimum standard of evidence for claimed improvements.
@@ -68,7 +68,7 @@ These results carry implications beyond our specific experimental setting. They 
 The contributions of this work are as follows:
 \begin{itemize}
     \item A systematic evaluation of five auxiliary morphological supervision strategies (clDice, skeleton distance transform, endpoint/junction detection, width regression, and their combination) for concrete defect segmentation, demonstrating that none significantly improves over a mask-only baseline under multi-seed validation.
-    \item A multi-seed evaluation of three standard domain generalisation methods (CORAL, DANN, MixStyle) under pseudo-domain single-source training, showing that all are statistically equivalent to empirical risk minimisation.
+    \item A multi-seed evaluation of three standard domain generalisation methods (CORAL, DANN, MixStyle) under pseudo-domain single-source training, showing that none achieves a statistically significant improvement over empirical risk minimisation.
     \item Identification of three concrete cases where single-seed evaluation produced misleading conclusions, providing an empirical demonstration of the fragility of single-seed comparisons in this domain.
     \item A multi-tier graph evaluation protocol for assessing the quality of crack graphs extracted from segmentation predictions, with strict, relaxed, and lenient tolerance tiers.
 \end{itemize}
@@ -120,7 +120,7 @@ Domain generalisation (DG) methods, which aim to learn domain-invariant represen
 
 A key practical constraint in infrastructure inspection is that labelled data often comes from a single source domain. In this single-source DG setting, pseudo-domains must be constructed---for example, by partitioning data based on difficulty, augmentation style, or other heuristics~\cite{elghazy2025pseudodg}. However, the effectiveness of pseudo-domain construction is not guaranteed: if the constructed pseudo-domains do not capture genuine distributional variation, DG methods may fail to learn meaningful domain-invariant features. Elghazy and Alaa~\cite{elghazy2025pseudodg} note that if a pseudo-domain's distribution is semantically irrelevant, it can disrupt the learning process and degrade model performance.
 
-Our study evaluates all three DG methods in a single-source pseudo-domain setting where DamSegment training images are partitioned into difficulty-based tiers. As reported in Section~\ref{sec:results_dg}, multi-seed evaluation reveals that all three methods are statistically equivalent to the ERM baseline ($p=0.878$ for MixStyle vs.\ ERM), with a stable domain gap of approximately 55\%. This finding suggests that difficulty-based pseudo-domains do not capture the distributional characteristics needed for effective domain generalisation, and that bridging real cross-site gaps likely requires genuine multi-source data collection.
+Our study evaluates all three DG methods in a single-source pseudo-domain setting where DamSegment training images are partitioned into difficulty-based tiers. As reported in Section~\ref{sec:results_dg}, multi-seed evaluation reveals no statistically significant difference between any DG method and the ERM baseline ($p=0.878$ for MixStyle vs.\ ERM), with a stable domain gap of approximately 55\%. This finding suggests that difficulty-based pseudo-domains do not capture the distributional characteristics needed for effective domain generalisation, and that bridging real cross-site gaps likely requires genuine multi-source data collection.
 
 
 % ============================================================
@@ -233,7 +233,7 @@ Spalling instance segmentation is evaluated using precision, recall, and F1 comp
 The domain gap is defined as the difference between DamSegment mIoU\textsubscript{fg} and s2ds mIoU\textsubscript{fg}, expressed as an absolute difference.
 
 \paragraph{Statistical tests.}
-Multi-seed comparisons use paired $t$-tests with significance declared at $p < 0.05$. We also report Two One-Sided Tests (TOST) equivalence tests with a margin of $\pm$1\% mIoU to assess whether methods are provably equivalent. Per-image paired comparisons use the Wilcoxon signed-rank test.
+Multi-seed comparisons use paired $t$-tests with significance declared at $p < 0.05$. A non-significant $t$-test indicates absence of evidence for a difference, but does not demonstrate equivalence. To affirmatively establish equivalence, we report Two One-Sided Tests (TOST) with a margin of $\pm$1\% mIoU; equivalence is declared only when $p_{\text{TOST}} < 0.05$. Per-image paired comparisons use the Wilcoxon signed-rank test.
 
 \subsection{Implementation Details}
 \label{sec:implementation}
@@ -467,11 +467,11 @@ This auto-label ceiling parallels the auxiliary supervision findings in Section~
 \subsection{Domain Generalisation Methods Are Ineffective Under Pseudo-Domains}
 \label{sec:results_dg}
 
-Table~\ref{tab:dg_multiseed} presents the multi-seed domain generalisation results. All four methods achieve similar in-domain performance on DamSegment (mIoU\textsubscript{fg} ranging from $0.668 \pm 0.010$ for MixStyle to $0.675 \pm 0.007$ for ERM) and similar out-of-distribution performance on s2ds (mIoU\textsubscript{fg} ranging from $0.115 \pm 0.012$ for ERM to $0.120 \pm 0.011$ for DANN). The domain gap remains stable at approximately 55\% across all methods. A paired $t$-test comparing MixStyle to ERM on s2ds mIoU\textsubscript{fg} yields $p = 0.878$, confirming statistical equivalence. The multi-seed results are visualised in Figure~\ref{fig:fig_dg_multiseed_domain_gap}.
+Table~\ref{tab:dg_multiseed} presents the multi-seed domain generalisation results. All four methods achieve similar in-domain performance on DamSegment (mIoU\textsubscript{fg} ranging from $0.668 \pm 0.010$ for MixStyle to $0.675 \pm 0.007$ for ERM) and similar out-of-distribution performance on s2ds (mIoU\textsubscript{fg} ranging from $0.115 \pm 0.012$ for ERM to $0.120 \pm 0.011$ for DANN). The domain gap remains stable at approximately 55\% across all methods. A paired $t$-test comparing MixStyle to ERM on s2ds mIoU\textsubscript{fg} yields $p = 0.878$, indicating no statistically significant difference. The multi-seed results are visualised in Figure~\ref{fig:fig_dg_multiseed_domain_gap}.
 
 \begin{table}[t]
 \centering
-\caption{Domain generalisation results (3 seeds: 42, 123, 7). All methods are statistically equivalent to ERM ($p = 0.878$ for MixStyle vs ERM). The domain gap of ${\sim}$55\% is not reduced by any DG method.}
+\caption{Domain generalisation results (3 seeds: 42, 123, 7). No method achieves a statistically significant difference from ERM ($p = 0.878$ for MixStyle vs ERM). The domain gap of ${\sim}$55\% is not reduced by any DG method.}
 \label{tab:dg_multiseed}
 \begin{tabular}{llccc}
 \toprule
@@ -548,12 +548,12 @@ This study presented a systematic, multi-seed evaluation of auxiliary morphologi
 
     \item \textbf{Direct neural graph prediction is limited by auto-label quality.} The architecture is capable of learning graph structure (overfit gates pass at node F1 = 0.934, edge F1 = 0.865), but auto-generated training labels create a quality ceiling that prevents generalisation (full-train node F1 = 0.30, edge F1 = 0.195). Gold-standard graph annotations are needed.
 
-    \item \textbf{Standard DG methods are ineffective under pseudo-domain single-source training.} ERM, CORAL, DANN, and MixStyle are statistically equivalent ($p = 0.878$), with a stable domain gap of approximately 55\%. Difficulty-based pseudo-domains do not capture genuine cross-site distribution shifts.
+    \item \textbf{Standard DG methods are ineffective under pseudo-domain single-source training.} No statistically significant difference was detected between ERM, CORAL, DANN, and MixStyle ($p = 0.878$ for MixStyle vs ERM), with a stable domain gap of approximately 55\%. Difficulty-based pseudo-domains do not capture genuine cross-site distribution shifts.
 \end{enumerate}
 
 The most impactful contribution of this work is methodological: we documented three concrete cases where single-seed evaluation produced misleading conclusions---a positive result that was halved, a negative result whose direction reversed, and a +52\% relative improvement that vanished entirely. These findings demonstrate that the effect sizes typically reported in the crack segmentation literature are within the range of seed-dependent variance, calling into question the reliability of single-seed claims of improvement.
 
-Based on these findings, we offer two practical recommendations. First, for concrete defect segmentation, the mask-only baseline (B0) should be the default choice: it is the simplest configuration, achieves equivalent performance to all auxiliary supervision variants, and avoids the added complexity and instability of multi-head training. Second, for cross-site generalisation, investment in multi-site labelled data collection is more likely to yield progress than the application of DG methods to single-source data with constructed pseudo-domains.
+Based on these findings, we offer two practical recommendations. First, for concrete defect segmentation, the mask-only baseline (B0) should be the default choice: it is the simplest configuration, achieves performance indistinguishable from all auxiliary supervision variants under our multi-seed protocol, and avoids the added complexity and instability of multi-head training. Second, for cross-site generalisation, investment in multi-site labelled data collection is more likely to yield progress than the application of DG methods to single-source data with constructed pseudo-domains.
 
 Future work should pursue three directions: (1) gold-standard graph annotations for a representative subset of crack images, enabling direct neural graph prediction beyond the auto-label ceiling identified in Section~\ref{sec:results_p3}; (2) true multi-source domain generalisation with labelled data from multiple inspection sites, sensors, and environmental conditions, addressing the pseudo-domain failure documented in Section~\ref{sec:results_dg}; and (3) learned instance segmentation heads for spalling, building on the reasonable post-hoc connected-component baseline (micro F1 = 0.567) established in Section~\ref{sec:results_spalling}.
 
