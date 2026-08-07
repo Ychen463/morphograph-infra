@@ -1,0 +1,16 @@
+{
+  "pdflatex_available": false,
+  "latexmk_available": false,
+  "tectonic_available": true,
+  "tectonic_path": "/opt/homebrew/bin/tectonic",
+  "packages": {
+    "booktabs": true,
+    "hyperref": true,
+    "graphicx": true,
+    "amsmath": true,
+    "subcaption": true,
+    "microtype": false,
+    "cleveref": false
+  },
+  "note": "Use tectonic for local compilation: tectonic paper.tex"
+}

@@ -1,0 +1,58 @@
+{
+  "D1_erm": {
+    "n_seeds": 3,
+    "dg_method": "ERM",
+    "final_damseg_miou_fg_mean": 0.6747897691586376,
+    "final_damseg_miou_fg_std": 0.006524272243788349,
+    "final_s2ds_miou_fg_mean": 0.11457130404576149,
+    "final_s2ds_miou_fg_std": 0.011847608796106534,
+    "domain_gap_mean": 0.5602184651128762,
+    "domain_gap_std": 0.015133104745661125,
+    "s2ds_crack_mean": 0.04933524272865608,
+    "s2ds_crack_std": 0.006498002607929581,
+    "s2ds_spalling_mean": 0.1798073653628669,
+    "s2ds_spalling_std": 0.024323584949414962
+  },
+  "D2a_coral": {
+    "n_seeds": 3,
+    "dg_method": "CORAL",
+    "final_damseg_miou_fg_mean": 0.6722154400853265,
+    "final_damseg_miou_fg_std": 0.00564595559617008,
+    "final_s2ds_miou_fg_mean": 0.11794715588447553,
+    "final_s2ds_miou_fg_std": 0.010077053193763622,
+    "domain_gap_mean": 0.554268284200851,
+    "domain_gap_std": 0.01306520609089929,
+    "s2ds_crack_mean": 0.05921987156636876,
+    "s2ds_crack_std": 0.007722525028694785,
+    "s2ds_spalling_mean": 0.17667444020258236,
+    "s2ds_spalling_std": 0.013145346630464521
+  },
+  "D2b_dann": {
+    "n_seeds": 3,
+    "dg_method": "DANN",
+    "final_damseg_miou_fg_mean": 0.6735008547982019,
+    "final_damseg_miou_fg_std": 0.008974887056288157,
+    "final_s2ds_miou_fg_mean": 0.12028840337802693,
+    "final_s2ds_miou_fg_std": 0.011049582800454129,
+    "domain_gap_mean": 0.5532124514201749,
+    "domain_gap_std": 0.015131330786031886,
+    "s2ds_crack_mean": 0.04810480243088702,
+    "s2ds_crack_std": 0.0038802861449933864,
+    "s2ds_spalling_mean": 0.19247200432516684,
+    "s2ds_spalling_std": 0.01899856266919595
+  },
+  "D2c_mixstyle": {
+    "n_seeds": 3,
+    "dg_method": "MixStyle",
+    "final_damseg_miou_fg_mean": 0.6677630644950271,
+    "final_damseg_miou_fg_std": 0.010182060980494557,
+    "final_s2ds_miou_fg_mean": 0.11609230370240768,
+    "final_s2ds_miou_fg_std": 0.005773040585475722,
+    "domain_gap_mean": 0.5516707607926196,
+    "domain_gap_std": 0.015955100944468233,
+    "s2ds_crack_mean": 0.05174980850767444,
+    "s2ds_crack_std": 0.008697636486045041,
+    "s2ds_spalling_mean": 0.18043479889714087,
+    "s2ds_spalling_std": 0.016000471558727532
+  }
+}

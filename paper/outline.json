@@ -1,0 +1,319 @@
+{
+  "plotting_plan": [
+    {
+      "figure_id": "fig_baseline_ladder_overview",
+      "title": "Progressive Baseline Ladder Architecture",
+      "plot_type": "diagram",
+      "data_source": "idea.md",
+      "objective": "Block diagram showing the progressive baseline ladder (B0-B5) built on SegFormer-B2 with SharedFPN. Show how auxiliary heads (skeleton DT, endpoints, junctions, width) are incrementally added. Include the three post-hoc graph extraction methods (A: skeleton, B: DT ridge, C: DT peak).",
+      "aspect_ratio": "16:9"
+    },
+    {
+      "figure_id": "fig_multiseed_baseline_comparison",
+      "title": "Multi-Seed Baseline Comparison",
+      "plot_type": "plot",
+      "data_source": "experimental_log.md",
+      "objective": "Grouped bar chart with error bars (3 seeds) comparing B0, B1a (clDice), and B2_best (skeleton DT) on mIoU_fg. Annotate paired t-test p-values above each comparison. Show that single-seed results (diamond markers) can be misleading vs multi-seed means.",
+      "aspect_ratio": "4:3"
+    },
+    {
+      "figure_id": "fig_single_vs_multiseed_overturned",
+      "title": "Three Overturned Single-Seed Claims",
+      "plot_type": "plot",
+      "data_source": "experimental_log.md",
+      "objective": "Visual comparison (Dumbbell Chart, 3-panel) showing how single-seed conclusions were overturned by multi-seed validation: (a) B2 '+1%' -> +0.5% ns, (b) B1a '-1.6%' -> +0.2% ns, (c) MixStyle '+52%' OOD -> ~0% ns. Each panel shows individual seed values connected to the mean, with p-values annotated.",
+      "aspect_ratio": "16:9"
+    },
+    {
+      "figure_id": "fig_graph_extraction_edge_f1",
+      "title": "Post-Hoc Graph Extraction Quality",
+      "plot_type": "plot",
+      "data_source": "experimental_log.md",
+      "objective": "Grouped bar chart comparing Methods A, B, C on edge F1 at three tolerance tiers (strict @5px, relaxed @10px, lenient @15px) for B2_best model. Include box plot overlays showing per-image distribution (emphasize that median = 0 for most methods).",
+      "aspect_ratio": "4:3"
+    },
+    {
+      "figure_id": "fig_dg_multiseed_domain_gap",
+      "title": "Domain Generalization Multi-Seed Results",
+      "plot_type": "plot",
+      "data_source": "experimental_log.md",
+      "objective": "Bar chart with error bars (3 seeds) showing DamSegment mIoU_fg (left cluster) and s2ds mIoU_fg (right cluster) for ERM, CORAL, DANN, MixStyle. Annotate domain gap (~55%) and statistical equivalence (p=0.878). Include a horizontal dashed line at the ERM mean for visual reference.",
+      "aspect_ratio": "4:3"
+    },
+    {
+      "figure_id": "fig_p3_overfit_vs_full",
+      "title": "Direct Graph Prediction: Overfit vs Full Training",
+      "plot_type": "plot",
+      "data_source": "experimental_log.md",
+      "objective": "Paired bar chart comparing P3 overfit results (16 images) vs full training (1275 images) on node F1@5px, edge_gt F1@10px, and edge F1@10px. Show the dramatic gap between overfit success and full-train failure, illustrating the auto-label ceiling effect.",
+      "aspect_ratio": "4:3"
+    }
+  ],
+  "intro_related_work_plan": {
+    "introduction_strategy": {
+      "hook_hypothesis": "Automated crack and spalling detection from inspection images is critical for infrastructure safety, and deep learning segmentation models have become the standard approach.",
+      "problem_gap_hypothesis": "Despite widespread adoption of auxiliary morphological supervision (topology-preserving losses, skeleton heads, keypoint detection) to improve crack segmentation quality, the effectiveness of these methods has not been rigorously validated with multi-seed experiments. Similarly, standard domain generalization methods have not been systematically evaluated for cross-site concrete defect segmentation under realistic single-source conditions.",
+      "search_directions": [
+        "Find highly cited papers on deep learning for concrete crack detection and segmentation published 2019-2026",
+        "Search for published surveys on structural health monitoring using computer vision and deep learning",
+        "Identify foundational papers on semantic segmentation architectures (SegFormer, DeepLabV3+, U-Net) applied to infrastructure inspection",
+        "Find papers establishing the importance of cross-site generalization in structural inspection and infrastructure monitoring",
+        "Search for papers discussing reproducibility and seed sensitivity in deep learning for civil engineering applications"
+      ]
+    },
+    "related_work_strategy": {
+      "overview": "Investigate three methodology clusters that our systematic study evaluates: topology-aware segmentation losses, morphological graph extraction from crack images, and domain generalization for infrastructure defect detection.",
+      "subsections": [
+        {
+          "subsection_title": "2.1 Topology-Preserving Losses for Crack Segmentation",
+          "methodology_cluster": "Topology-aware auxiliary losses (clDice, persistent homology, connectivity losses)",
+          "sota_investigation_mission": "Find recent papers (2020-2026) that apply topology-preserving losses to crack or thin-structure segmentation. Identify which ones report multi-seed results vs single-seed.",
+          "limitation_hypothesis": "These methods are typically validated with single random seeds, making their reported improvements potentially attributable to seed variance rather than genuine methodological gains.",
+          "limitation_search_queries": [
+            "clDice topology loss crack segmentation concrete",
+            "persistent homology loss thin structure segmentation",
+            "connectivity preserving loss road crack detection",
+            "topology loss seed sensitivity deep learning segmentation"
+          ],
+          "bridge_to_our_method": "Our multi-seed evaluation reveals that clDice does not significantly improve (or harm) crack segmentation when properly validated with multiple seeds."
+        },
+        {
+          "subsection_title": "2.2 Crack Graph and Skeleton Extraction",
+          "methodology_cluster": "Morphological graph extraction from crack masks (skeletonization, distance transforms, keypoint detection)",
+          "sota_investigation_mission": "Find papers on crack skeleton extraction, morphological analysis, and graph-based crack representation from 2019-2026. Identify what graph metrics are used to evaluate structural quality.",
+          "limitation_hypothesis": "Skeleton-based auxiliary supervision is assumed to improve downstream graph extraction quality, but this assumption has not been empirically tested with proper controls and statistical validation.",
+          "limitation_search_queries": [
+            "crack skeleton extraction morphological analysis deep learning",
+            "distance transform auxiliary supervision semantic segmentation",
+            "crack graph representation endpoint junction detection",
+            "graph neural network crack topology reconstruction"
+          ],
+          "bridge_to_our_method": "Our study shows that skeleton DT supervision does not significantly improve segmentation or post-hoc graph extraction quality, and that direct neural graph prediction is limited by auto-label quality."
+        },
+        {
+          "subsection_title": "2.3 Domain Generalization for Infrastructure Defect Detection",
+          "methodology_cluster": "Domain generalization methods (CORAL, DANN, MixStyle, data augmentation) for cross-site defect detection",
+          "sota_investigation_mission": "Find papers applying domain generalization or domain adaptation to concrete defect detection or structural health monitoring from 2020-2026. Identify whether multi-site evaluation is standard practice.",
+          "limitation_hypothesis": "Standard DG methods (CORAL, DANN, MixStyle) may fail when pseudo-domains constructed from difficulty tiers do not capture genuine cross-site distribution shifts.",
+          "limitation_search_queries": [
+            "domain generalization concrete crack detection cross-site",
+            "domain adaptation structural health monitoring inspection",
+            "CORAL DANN MixStyle infrastructure defect segmentation",
+            "pseudo-domain single-source domain generalization failure"
+          ],
+          "bridge_to_our_method": "Our multi-seed evaluation reveals that all three standard DG methods are statistically equivalent to ERM baseline, demonstrating that pseudo-domain strategies are insufficient for bridging real cross-site gaps."
+        }
+      ]
+    }
+  },
+  "section_plan": [
+    {
+      "section_title": "Abstract",
+      "subsections": [
+        {
+          "subsection_title": "Abstract Content",
+          "content_bullets": [
+            "State the problem: auxiliary morphological supervision is widely used to improve crack segmentation but has not been rigorously validated with multi-seed experiments.",
+            "Describe the study: systematic evaluation of a progressive baseline ladder (B0-B5) on SegFormer-B2, three post-hoc graph extraction methods, direct neural graph prediction, and three standard DG methods, all on concrete dam inspection imagery.",
+            "Present the central negative finding: three single-seed conclusions were overturned by multi-seed validation (B2 skeleton DT '+1%', B1a clDice '-1.6%', MixStyle '+52%' OOD).",
+            "State the contribution: a rigorous experimental methodology with go/no-go gates and multi-tier graph evaluation that reveals the fragility of single-seed conclusions in this domain."
+          ],
+          "citation_hints": []
+        }
+      ]
+    },
+    {
+      "section_title": "3. Methodology",
+      "subsections": [
+        {
+          "subsection_title": "3.1 Baseline Architecture",
+          "content_bullets": [
+            "Describe the SegFormer-B2 backbone with MIT encoder and MLP decoder, operating at 512x512 resolution.",
+            "Detail the SharedFPN architecture that enables multi-task head attachment.",
+            "Specify the B0 mask-only baseline: weighted CE loss [0.2, 2.0, 3.0] + Dice loss for 3-class segmentation (background, crack, spalling).",
+            "Training protocol: 100 epochs, differential LR (encoder 6e-5, heads 6e-4), GroupNorm (batch=4), mixed precision."
+          ],
+          "citation_hints": [
+            "research paper or technical report introducing 'SegFormer'",
+            "research paper or technical report introducing 'Feature Pyramid Network (FPN)'",
+            "research paper or technical report introducing 'Dice loss for segmentation'",
+            "research paper or technical report introducing 'GroupNorm'"
+          ]
+        },
+        {
+          "subsection_title": "3.2 Progressive Auxiliary Supervision Ladder",
+          "content_bullets": [
+            "B1a: B0 + soft clDice loss on crack class (weight=0.15, activated at epoch 40 with 5-epoch ramp). Define the clDice formulation as soft skeleton recall times soft skeleton precision.",
+            "B2: B0 + skeleton distance transform regression head (MSE loss, weight=10, unmasked DT target). Describe the normalized DT computation from crack masks.",
+            "B3: B0 + endpoint and junction detection heads (BCE with high pos_weight for extreme class imbalance, plus keypoint Dice loss).",
+            "B5: B0 + full joint supervision (skeleton DT + keypoints + width regression). Explain the progressive loss activation schedule.",
+            "Emphasize: each baseline adds one supervision type incrementally, with identical training budget (100 epochs) for fair comparison."
+          ],
+          "citation_hints": [
+            "research paper or technical report introducing 'clDice (centerline Dice)'",
+            "research paper or technical report introducing 'CenterNet keypoint detection'",
+            "research paper or technical report introducing 'distance transform in image processing'"
+          ]
+        },
+        {
+          "subsection_title": "3.3 Post-Hoc Graph Extraction Methods",
+          "content_bullets": [
+            "Method A (skeleton extraction): skeletonize predicted crack mask, extract endpoints (degree-1) and junctions (degree>=3) as nodes, connected skeleton segments as edges.",
+            "Method B (DT ridge detection): find ridges in predicted distance transform map above threshold, extract graph from ridge skeleton.",
+            "Method C (DT peak detection): find local maxima in predicted DT map, connect peaks by proximity to form graph edges.",
+            "Define the multi-tier evaluation protocol: strict (@5px), relaxed (@10px), lenient (@15px) tolerance for node matching, with corresponding edge F1 metrics."
+          ],
+          "citation_hints": [
+            "research paper or technical report introducing 'morphological skeletonization'",
+            "research paper or technical report introducing 'graph edit distance'"
+          ]
+        },
+        {
+          "subsection_title": "3.4 Domain Generalization Methods",
+          "content_bullets": [
+            "Describe pseudo-domain construction: DamSegment images split into Easy/Medium/Hard tiers based on defect difficulty, used as proxy source domains.",
+            "CORAL: covariance alignment loss between pseudo-domain feature distributions, applied at encoder stage 2.",
+            "DANN: gradient reversal layer + domain discriminator MLP, with GRL alpha scheduling from 0 to 1 over training.",
+            "MixStyle: Beta-distributed mixing of instance normalization statistics, applied as forward hooks on encoder stages 0-1.",
+            "Multi-seed protocol: 3 seeds (42, 123, 7) x 4 methods = 12 runs, with paired t-test for significance."
+          ],
+          "citation_hints": [
+            "research paper or technical report introducing 'CORAL (Correlation Alignment)'",
+            "research paper or technical report introducing 'DANN (Domain-Adversarial Neural Networks)'",
+            "research paper or technical report introducing 'MixStyle'",
+            "research paper or technical report introducing 'gradient reversal layer'"
+          ]
+        }
+      ]
+    },
+    {
+      "section_title": "4. Experimental Setup",
+      "subsections": [
+        {
+          "subsection_title": "4.1 Datasets",
+          "content_bullets": [
+            "DamSegment: 1500 concrete dam inspection images, 640x640, resized to 512x512, train/val split 1275/225. RGB-encoded masks with 3 classes. Class imbalance: background 96.6%, crack 2.2%, spalling 1.2%.",
+            "s2ds: 743 images at 512x512, out-of-distribution test set from different inspection sites. Used only for cross-domain evaluation, never for training.",
+            "Describe the data split strategy and leakage prevention (perceptual hash dedup)."
+          ],
+          "citation_hints": [
+            "research paper or technical report introducing 'DamSegment dataset'",
+            "research paper or technical report introducing 's2ds dataset'"
+          ]
+        },
+        {
+          "subsection_title": "4.2 Evaluation Metrics",
+          "content_bullets": [
+            "Segmentation: mIoU_fg (mean IoU over foreground classes), per-class IoU, BF1 (boundary F1).",
+            "Graph: endpoint F1, junction F1, edge F1 at three tolerance tiers, graph edit distance, path continuity, width MAE.",
+            "Instance: spalling instance P/R/F1 via connected components + Hungarian matching at IoU threshold 0.5.",
+            "Cross-domain: domain gap defined as DamSegment mIoU_fg minus s2ds mIoU_fg.",
+            "Statistical tests: paired t-test for multi-seed comparisons, Wilcoxon signed-rank for paired per-image comparisons, TOST equivalence test with margin +/-1% mIoU."
+          ],
+          "citation_hints": [
+            "research paper or technical report introducing 'mean Intersection over Union (mIoU)'",
+            "research paper or technical report introducing 'boundary F1 score'",
+            "research paper or technical report introducing 'Hungarian algorithm for matching'",
+            "research paper or technical report introducing 'TOST (Two One-Sided Tests) equivalence testing'"
+          ]
+        },
+        {
+          "subsection_title": "4.3 Implementation Details",
+          "content_bullets": [
+            "SegFormer-B2 pretrained on ImageNet-1K, fine-tuned end-to-end.",
+            "Optimizer: AdamW, weight decay 1e-4, cosine LR schedule with 5-epoch warmup.",
+            "Batch size 4 with gradient accumulation, mixed precision (AMP).",
+            "All experiments on single NVIDIA GPU (RunPod cloud).",
+            "Multi-seed: seeds 42, 123, 7 for B0, B1a, B2_best, and all DG methods."
+          ],
+          "citation_hints": [
+            "research paper or technical report introducing 'AdamW optimizer'",
+            "research paper or technical report introducing 'ImageNet dataset'",
+            "research paper or technical report introducing 'mixed precision training'",
+            "research paper or technical report introducing 'cosine annealing learning rate schedule'"
+          ]
+        }
+      ]
+    },
+    {
+      "section_title": "5. Results and Discussion",
+      "subsections": [
+        {
+          "subsection_title": "5.1 Auxiliary Supervision Does Not Improve Segmentation",
+          "content_bullets": [
+            "Present Table 1b: B0 vs B1a vs B2_best multi-seed results. B1a: +0.2%+/-0.9% (p=0.822), B2_best: +0.5%+/-0.3% (p=0.145). Neither significant.",
+            "Present single-seed ladder (Table 1) for context: B3 -0.5%, B5 -2.7% vs B0.",
+            "Discuss the DT weight sweep (Table 2): apparent optimum at w=10 vanishes under multi-seed.",
+            "Discuss B1a variance: std=0.015 vs B0's 0.008, suggesting clDice makes training less stable.",
+            "Reference fig_multiseed_baseline_comparison."
+          ],
+          "citation_hints": []
+        },
+        {
+          "subsection_title": "5.2 Post-Hoc Graph Extraction Remains Challenging",
+          "content_bullets": [
+            "Present Table 3: edge F1 at three tiers for Method A. Median edge F1 = 0 across all methods.",
+            "Present Table 4: B0 vs B2_best on graph metrics. All Wilcoxon p > 0.23, skeleton supervision does not help graph extraction.",
+            "Compare Methods A, B, C: skeleton extraction (A) outperforms DT-based methods (B, C).",
+            "Discuss spalling instance baseline (Table 5): post-hoc CC achieves micro F1 = 0.567 without any learned instance head.",
+            "Reference fig_graph_extraction_edge_f1."
+          ],
+          "citation_hints": [
+            "research paper or technical report introducing 'Wilcoxon signed-rank test'"
+          ]
+        },
+        {
+          "subsection_title": "5.3 Direct Graph Prediction Hits the Auto-Label Ceiling",
+          "content_bullets": [
+            "Present P3 overfit results (Table 6): all gates pass (node F1=0.934, edge_gt F1=0.917).",
+            "Present P3 full train results (Table 7): gates fail (node F1=0.30, edge F1=0.195).",
+            "P3h hybrid analysis (Table 8): edge classifier generalizes well (edge_gt F1 0.654 vs 0.454), confirming node localization as the bottleneck.",
+            "Root cause: auto-generated labels from mask-to-graph pipeline limit what the model can learn. Gold standard annotations are needed.",
+            "Reference fig_p3_overfit_vs_full."
+          ],
+          "citation_hints": []
+        },
+        {
+          "subsection_title": "5.4 Domain Generalization Methods Are Ineffective Under Pseudo-Domains",
+          "content_bullets": [
+            "Present Table 10: multi-seed DG results. All four methods statistically equivalent (MixStyle vs ERM p=0.878).",
+            "Present Table 9: cross-domain baseline showing ~55% domain gap (DamSegment to s2ds).",
+            "Discuss why pseudo-domains fail: difficulty-based tiers do not capture genuine cross-site distribution shifts (different sensors, environments, surface textures).",
+            "Reference fig_dg_multiseed_domain_gap."
+          ],
+          "citation_hints": []
+        },
+        {
+          "subsection_title": "5.5 The Danger of Single-Seed Evaluation",
+          "content_bullets": [
+            "Present the three overturned claims side-by-side: B2 '+1%', B1a '-1.6%', MixStyle '+52%'.",
+            "Quantify the magnitude of seed variance relative to reported effect sizes.",
+            "Discuss implications for the broader crack segmentation literature where single-seed evaluation is standard practice.",
+            "Argue that multi-seed validation should be a minimum requirement for claims of improvement.",
+            "Reference fig_single_vs_multiseed_overturned."
+          ],
+          "citation_hints": [
+            "research paper or technical report introducing 'reproducibility crisis in machine learning'"
+          ]
+        }
+      ]
+    },
+    {
+      "section_title": "6. Conclusions",
+      "subsections": [
+        {
+          "subsection_title": "Conclusions Content",
+          "content_bullets": [
+            "Summarize the central negative finding: no auxiliary morphological supervision significantly improves crack segmentation when properly validated with multiple seeds.",
+            "Summarize the DG negative finding: standard DG methods do not reduce cross-site domain gap under pseudo-domain single-source training.",
+            "Highlight the methodological contribution: three cases of misleading single-seed results overturned by multi-seed validation.",
+            "Discuss the auto-label ceiling as a fundamental limitation for neural graph prediction without gold standard annotations.",
+            "State future work: gold standard graph annotations, true multi-source domain generalization with multiple inspection sites, and learned instance segmentation heads.",
+            "Provide practical recommendations: use B0 mask-only baseline as the default (simplest, equally effective), invest in multi-site data collection rather than DG method development."
+          ],
+          "citation_hints": []
+        }
+      ]
+    }
+  ]
+}

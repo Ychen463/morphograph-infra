@@ -9,6 +9,16 @@
       "7": 0.6813073223497585
     }
   },
+  "B1a": {
+    "n_seeds": 3,
+    "best_miou_fg_mean": 0.672641195748351,
+    "best_miou_fg_std": 0.014567436475668504,
+    "per_seed": {
+      "123": 0.6586898461462702,
+      "42": 0.6664892206675831,
+      "7": 0.6927445204311999
+    }
+  },
   "B2_best": {
     "n_seeds": 3,
     "best_miou_fg_mean": 0.6762285186847506,
@@ -19,13 +29,30 @@
       "7": 0.686552496695532
     }
   },
-  "paired_test": {
-    "comparison": "B2_best vs B0",
-    "n_pairs": 3,
-    "mean_delta": 0.005214897190285672,
-    "std_delta": 0.0031560172220598567,
-    "t_stat": 2.336799140807563,
-    "p_value": 0.1444731843669418,
-    "significant": false
+  "pairwise_tests": {
+    "B1a": {
+      "comparison": "B1a vs B0",
+      "n_pairs": 3,
+      "mean_delta": 0.001627574253886192,
+      "std_delta": 0.008995376336168516,
+      "t_stat": 0.2558800763410332,
+      "p_value": 0.8219563287304053,
+      "significant": false,
+      "tost_margin": 0.01,
+      "tost_p": 0.15934696703814882,
+      "tost_equivalent": false
+    },
+    "B2_best": {
+      "comparison": "B2_best vs B0",
+      "n_pairs": 3,
+      "mean_delta": 0.005214897190285672,
+      "std_delta": 0.0031560172220598567,
+      "t_stat": 2.336799140807563,
+      "p_value": 0.1444731843669418,
+      "significant": false,
+      "tost_margin": 0.01,
+      "tost_p": 0.08260907327740392,
+      "tost_equivalent": false
+    }
   }
 }
