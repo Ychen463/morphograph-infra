@@ -6,6 +6,7 @@ Extracted from train_b0.py / train_b1a.py to eliminate duplication.
 from __future__ import annotations
 
 import math
+import os
 import random
 from pathlib import Path
 
@@ -206,10 +207,20 @@ def save_checkpoint(
     config = {}
     for k, v in vars(args).items():
         config[k] = str(v) if isinstance(v, Path) else v
-    torch.save({
-        "epoch": epoch,
-        "model_state_dict": model.state_dict(),
-        "optimizer_state_dict": optimizer.state_dict(),
-        "best_miou_fg": best_miou_fg,
-        "config": config,
-    }, path)
+    # Write to local /tmp first, then move to network FS to avoid IO errors
+    import tempfile, shutil
+    fd, tmp_path = tempfile.mkstemp(suffix=".pt", dir="/tmp")
+    os.close(fd)
+    try:
+        torch.save({
+            "epoch": epoch,
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "best_miou_fg": best_miou_fg,
+            "config": config,
+        }, tmp_path)
+        shutil.move(tmp_path, path)
+    except Exception:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        raise

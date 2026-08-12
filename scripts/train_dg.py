@@ -356,7 +356,7 @@ def main():
         if is_best:
             best_miou_fg = dm_miou["mIoU_fg"]
             save_checkpoint(args.output / "best.pt", model, optimizer, epoch, best_miou_fg, args)
-        save_checkpoint(args.output / "last.pt", model, optimizer, epoch, best_miou_fg, args)
+        # Skip last.pt to reduce IO on network FS; best.pt is sufficient
 
         # Log
         elapsed = time.time() - t0
