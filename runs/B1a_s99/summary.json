@@ -1,0 +1,19 @@
+{
+  "baseline": "B1a",
+  "description": "B0 + clDice (topology loss on crack class)",
+  "best_miou_fg": 0.7027183962695549,
+  "b0_miou_fg": 0.673,
+  "delta_miou_fg": 0.02971839626955486,
+  "final_val_loss": 0.31296774339780475,
+  "epochs": 100,
+  "total_params": 27085251,
+  "cldice_config": {
+    "weight": 0.15,
+    "start_epoch": 40,
+    "ramp_epochs": 5,
+    "num_iters": 10
+  },
+  "train_samples": 1275,
+  "val_samples": 225,
+  "seed": 99
+}
