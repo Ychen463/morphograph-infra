@@ -1,0 +1,24 @@
+{
+  "baseline": "B2",
+  "dg_method": "ERM",
+  "best_miou_fg": 0.6938545705992705,
+  "final_damseg_miou_fg": 0.6938545705992705,
+  "final_damseg_per_class": {
+    "0": 0.9713568715773971,
+    "1": 0.5344252109582707,
+    "2": 0.8532839302402702
+  },
+  "final_s2ds_miou_fg": 0.10959675666282762,
+  "final_s2ds_per_class": {
+    "0": 0.9254835129786156,
+    "1": 0.0526709793632465,
+    "2": 0.16652253396240874
+  },
+  "domain_gap": 0.5842578139364428,
+  "epochs": 100,
+  "total_params": 27232900,
+  "seed": 0,
+  "mixstyle": null,
+  "coral": null,
+  "dann": null
+}
