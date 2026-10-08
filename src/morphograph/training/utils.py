@@ -224,3 +224,79 @@ def save_checkpoint(
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
         raise
+
+
+# ---------------------------------------------------------------------------
+# Per-class metrics (called once after training, from best.pt)
+# ---------------------------------------------------------------------------
+
+def eval_perclass_metrics(
+    checkpoint_path: Path,
+    val_loader,
+    device: "torch.device",
+) -> dict:
+    """Load best.pt and compute per-class IoU + BF1 over the val set.
+
+    Returns a dict with keys:
+        iou_crack, iou_spalling, miou_fg,
+        bf1_crack, bf1_spalling
+
+    Imported lazily to avoid circular imports in training scripts.
+    """
+    import sys
+    from pathlib import Path as _Path
+    sys.path.insert(0, str(_Path(__file__).parent.parent.parent.parent / "src"))
+
+    from morphograph.metrics.segmentation import compute_iou, compute_boundary_f1
+    from morphograph.data.schema import NUM_CLASSES
+
+    # Load model from checkpoint (auto-detect architecture)
+    ckpt = torch.load(checkpoint_path, map_location=device, weights_only=False)
+    state = ckpt["model_state_dict"] if "model_state_dict" in ckpt else ckpt
+
+    from morphograph.models.morphograph_net import MorphoAuxNet, FPN_DIM
+    head_flags = {name: any(name in k for k in state)
+                  for name in ["seg", "skeleton", "endpoints", "junctions", "width"]}
+    model = MorphoAuxNet(
+        backbone="mit_b2", num_classes=NUM_CLASSES,
+        fpn_dim=FPN_DIM, heads=head_flags,
+    )
+    model.load_state_dict(state, strict=False)
+    model.to(device)
+    model.eval()
+
+    iou_accum: dict = {c: [] for c in range(NUM_CLASSES)}
+    bf1_accum: dict = {1: [], 2: []}
+
+    with torch.no_grad():
+        for batch in val_loader:
+            images = batch["image"].to(device)
+            masks = batch["mask"].numpy()
+
+            with torch.amp.autocast("cuda", enabled=device.type == "cuda"):
+                outputs = model(images)
+
+            preds = outputs["seg"].argmax(dim=1).cpu().numpy()
+
+            for i in range(len(images)):
+                iou = compute_iou(preds[i], masks[i])
+                bf1 = compute_boundary_f1(preds[i], masks[i], tolerance_px=2)
+                for c, v in iou.items():
+                    iou_accum[c].append(v)
+                for c, v in bf1.items():
+                    bf1_accum[c].append(v)
+
+    def _mean(lst):
+        return float(np.mean(lst)) if lst else None
+
+    iou_crack    = _mean(iou_accum[1])
+    iou_spalling = _mean(iou_accum[2])
+    miou_fg      = float(np.mean([v for v in [iou_crack, iou_spalling] if v is not None]))
+
+    return {
+        "iou_crack":    iou_crack,
+        "iou_spalling": iou_spalling,
+        "miou_fg":      miou_fg,
+        "bf1_crack":    _mean(bf1_accum[1]),
+        "bf1_spalling": _mean(bf1_accum[2]),
+    }

@@ -488,9 +488,17 @@ def main() -> None:
         print(f"Plot failed: {e}")
 
     # ── Summary ──
+    # ── Per-class metrics from best checkpoint ──
+    print("\nRunning final per-class eval from best.pt ...")
+    from morphograph.training.utils import eval_perclass_metrics
+    perclass = eval_perclass_metrics(args.output / "best.pt", val_loader, device)
+    print(f"  iou_crack={perclass['iou_crack']:.4f}  iou_spalling={perclass['iou_spalling']:.4f}"
+          f"  bf1_crack={perclass['bf1_crack']:.4f}")
+
     summary = {
         "baseline": args.baseline,
         "best_miou_fg": best_miou_fg,
+        "perclass": perclass,
         "b0_miou_fg": 0.673,
         "b2_best_miou_fg": 0.683,
         "delta_vs_b0": best_miou_fg - 0.673,
