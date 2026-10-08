@@ -27,7 +27,8 @@ class InstanceMetrics:
     precision: float = 0.0
     recall: float = 0.0
     f1: float = 0.0
-    mean_matched_iou: float = 0.0
+    mean_matched_iou: float = 0.0  # mean over all images; 0.0 if no TP match (can be < threshold)
+    matched_iou_sum: float = 0.0   # sum of IoU values for TP pairs (for global mean across images)
 
 
 def extract_instances(
@@ -117,10 +118,12 @@ def compute_instance_metrics(
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
     f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
     mean_iou = float(np.mean(matched_ious)) if matched_ious else 0.0
+    iou_sum = float(sum(matched_ious))
 
     return InstanceMetrics(
         n_gt=n_gt, n_pred=n_pred,
         tp=tp, fp=fp, fn=fn,
         precision=precision, recall=recall, f1=f1,
         mean_matched_iou=mean_iou,
+        matched_iou_sum=iou_sum,
     )

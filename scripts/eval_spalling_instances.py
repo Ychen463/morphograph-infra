@@ -182,7 +182,7 @@ def main():
                 # Only aggregate images that have GT or pred spalling
                 if im.n_gt > 0 or im.n_pred > 0:
                     for k in ["precision", "recall", "f1", "mean_matched_iou",
-                              "n_gt", "n_pred", "tp", "fp", "fn"]:
+                              "n_gt", "n_pred", "tp", "fp", "fn", "matched_iou_sum"]:
                         agg[k].append(getattr(im, k))
                     agg["semantic_iou"].append(spalling_iou)
 
@@ -209,7 +209,12 @@ def main():
         "macro_precision": float(np.mean(agg["precision"])) if agg["precision"] else 0.0,
         "macro_recall": float(np.mean(agg["recall"])) if agg["recall"] else 0.0,
         "macro_f1": float(np.mean(agg["f1"])) if agg["f1"] else 0.0,
-        "mean_matched_iou": float(np.mean(agg["mean_matched_iou"])) if agg["mean_matched_iou"] else 0.0,
+        # mean over all images with instances (0.0 for images with no TP match → can be < threshold)
+        "mean_matched_iou_per_image": float(np.mean(agg["mean_matched_iou"])) if agg["mean_matched_iou"] else 0.0,
+        # mean over TP pairs globally (guaranteed >= iou_threshold)
+        "mean_matched_iou_over_tp": (
+            float(sum(agg["matched_iou_sum"]) / total_tp) if total_tp > 0 else 0.0
+        ),
         "mean_semantic_iou": float(np.mean(agg["semantic_iou"])) if agg["semantic_iou"] else 0.0,
     }
 
@@ -221,7 +226,8 @@ def main():
     print(f"Instances: {summary['total_gt_instances']} GT, {summary['total_pred_instances']} pred")
     print(f"\nMicro:  P={micro_p:.3f}  R={micro_r:.3f}  F1={micro_f1:.3f}")
     print(f"Macro:  P={summary['macro_precision']:.3f}  R={summary['macro_recall']:.3f}  F1={summary['macro_f1']:.3f}")
-    print(f"Mean matched IoU: {summary['mean_matched_iou']:.3f}")
+    print(f"Mean per-image matched IoU (0 if no TP): {summary['mean_matched_iou_per_image']:.3f}")
+    print(f"Mean matched IoU over TP pairs (>= threshold): {summary['mean_matched_iou_over_tp']:.3f}")
     print(f"Semantic spalling IoU: {summary['mean_semantic_iou']:.3f}")
 
     # Save
