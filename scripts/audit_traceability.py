@@ -112,13 +112,15 @@ def main() -> int:
         Check("ERM  DamSeg", "Tab DG multi-seed", "D1_erm_s42",        "final_damseg_miou_fg", 0.675,  tolerance=0.010),
         Check("Mix  s2ds 42","Tab DG multi-seed", "D2c_mixstyle_s42",  "final_s2ds_miou_fg",   0.117,  tolerance=0.010),
 
-        # ---- Table (DG exploratory single run) — EXPECTED TO FAIL -----
-        # These values appear in the paper but have no matching run dir.
-        # They are flagged here so the failure is explicit and auditable.
-        Check("ERM  s2ds (exploratory)", "Tab DG exploratory",
-              "D1_erm_s42", "final_s2ds_miou_fg", 0.110),   # paper says 0.110; dir gives 0.130
-        Check("MixStyle s2ds (exploratory)", "Tab DG exploratory",
-              "D2c_mixstyle_s42", "final_s2ds_miou_fg", 0.167),  # paper says 0.167; dir gives 0.123
+        # ---- Tab DG exploratory (removed from paper 2026-10-08) --------
+        # The single-run DG table (ERM s2ds=0.110, MixStyle s2ds=0.167) was
+        # removed from the paper: no artifact was retained, so the values
+        # could not be independently verified.  Checks below are commented
+        # out as a permanent record of what was removed and why.
+        # Check("ERM  s2ds (exploratory)", "Tab DG exploratory",
+        #       "D1_erm_s42", "final_s2ds_miou_fg", 0.110),  # delta=+0.020, no artifact
+        # Check("MixStyle s2ds (exploratory)", "Tab DG exploratory",
+        #       "D2c_mixstyle_s42", "final_s2ds_miou_fg", 0.167),  # delta=-0.044, no artifact
     ]
 
     results = run_checks(args.runs_dir, checks)
@@ -149,11 +151,9 @@ def main() -> int:
     if n_fail:
         print()
         print("ACTION REQUIRED before submission:")
-        print("  Any FAIL in 'Tab DG exploratory' means the claimed single-seed")
-        print("  DG values cannot be reproduced from existing run artifacts.")
-        print("  Either: (a) recover original logs from RunPod and re-verify,")
-        print("          (b) re-run the exploratory DG experiment and update the table,")
-        print("       or (c) remove the DG single-seed table and the 52% abstract claim.")
+        print("  Every FAIL means a paper value cannot be traced to a run artifact.")
+        print("  Fix by: (a) recovering original logs and re-verifying, or")
+        print("          (b) correcting/removing the claim from the paper.")
 
     return 1 if n_fail else 0
 
