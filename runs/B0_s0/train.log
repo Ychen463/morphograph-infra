@@ -1,0 +1,18 @@
+nohup: ignoring input
+Device: cuda
+GPU: NVIDIA GeForce RTX 3090
+Data: 1500 total, 1275 train, 225 val
+/usr/local/lib/python3.12/dist-packages/albumentations/core/validation.py:114: UserWarning: ShiftScaleRotate is a special case of Affine transform. Please use Affine transform instead.
+  original_init(self, **validated_kwargs)
+Loading SegFormer-B2 pretrained encoder...
+Parameters: 27,085,251 total, 27,085,251 trainable
+  encoder: 24,196,288
+  fpn: 2,888,192
+  seg_head: 771
+
+Training B0 for 100 epochs...
+  Batches/epoch: 318
+  Warmup: 5 epochs (1590 steps)
+
+Epoch   1/100 | train=0.5903 val=0.4930 | mIoU_fg=0.4669 mIoU_all=0.6290 | c0=0.953 c1=0.408 c2=0.526 | lr=1.2e-05/1.2e-04 | 219s *
+Epoch   2/100 | train=0.4395 val=0.3766 | mIoU_fg=0.5499 mIoU_all=0.6865 | c0=0.960 c1=0.454 c2=0.646 | lr=2.4e-05/2.4e-04 | 214s *
