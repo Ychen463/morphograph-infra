@@ -77,12 +77,33 @@ def run_one(baseline: str, seed: int, data_root: Path, runs_dir: Path,
     print(f"  → {out_dir.name}  (log: {log_path})", flush=True)
 
     t0 = time.time()
+    POLL_INTERVAL = 30  # seconds between progress prints
+
     with open(log_path, "w") as log_f:
-        result = subprocess.run(cmd, stdout=log_f, stderr=subprocess.STDOUT)
+        proc = subprocess.Popen(cmd, stdout=log_f, stderr=subprocess.STDOUT)
+        last_print = t0
+        while True:
+            try:
+                proc.wait(timeout=POLL_INTERVAL)
+                break  # process finished
+            except subprocess.TimeoutExpired:
+                pass
+            elapsed_now = time.time() - t0
+            # Print last non-empty line from log as a heartbeat
+            last_line = ""
+            try:
+                with open(log_path) as lf:
+                    for line in lf:
+                        line = line.rstrip()
+                        if line:
+                            last_line = line
+            except OSError:
+                pass
+            print(f"    [{elapsed_now/60:.1f}m] {last_line[-120:]}", flush=True)
 
     elapsed = time.time() - t0
-    if result.returncode != 0:
-        print(f"    FAILED (exit {result.returncode}) after {elapsed/60:.1f}m — see {log_path}")
+    if proc.returncode != 0:
+        print(f"    FAILED (exit {proc.returncode}) after {elapsed/60:.1f}m — see {log_path}")
         return False
 
     # Quick sanity: check summary.json was written with perclass key
