@@ -76,17 +76,20 @@ def plot_single_vs_multiseed():
 
     # --- Panel (a): B2 vs B0 ---
     ax = axes[0]
-    single_seed_delta_b2 = 1.0  # +1.0% at seed 42 (exploratory)
+    # Both bars are within-confirmatory: single seed 42 vs five-seed mean
+    single_seed_delta_b2 = (
+        bl["B2_best"]["per_seed"]["42"] - bl["B0"]["per_seed"]["42"]
+    ) * 100  # +0.91 pp
     multi_mean_b2 = (bl["B2_best"]["best_miou_fg_mean"] - bl["B0"]["best_miou_fg_mean"]) * 100
-    multi_std_b2 = np.sqrt(bl["B2_best"]["best_miou_fg_std"] ** 2 + bl["B0"]["best_miou_fg_std"] ** 2) * 100
+    multi_std_b2 = bl["pairwise_tests"]["B2_best"]["std_delta"] * 100  # paired std of differences
 
     ax.bar(0, single_seed_delta_b2, color="#C0504D", width=0.6)
     ax.bar(1, multi_mean_b2, yerr=multi_std_b2, color="#4472C4", width=0.6,
            capsize=6, error_kw={"linewidth": 2})
     ax.axhline(0, color="black", linewidth=0.5)
     ax.set_xticks([0, 1])
-    ax.set_xticklabels(["Exploratory\n(single run)", "Confirmatory\n(5 seeds)"], fontsize=10)
-    ax.set_ylabel(r"$\Delta$ mIoU$_{fg}$ (%)", fontsize=11)
+    ax.set_xticklabels(["Single seed\n(seed 42)", "Five-seed mean\n(same protocol)"], fontsize=10)
+    ax.set_ylabel(r"$\Delta$ mIoU$_{fg}$ (pp)", fontsize=11)
     ax.set_title("(a) B2 skeleton DT vs B0", fontsize=12, fontweight="bold")
     ax.text(1, multi_mean_b2 + multi_std_b2 + 0.1, "p=0.713 (ns)", ha="center", fontsize=10)
     ax.set_ylim(-1.5, 1.5)
@@ -94,21 +97,24 @@ def plot_single_vs_multiseed():
 
     # --- Panel (b): B1a vs B0 ---
     ax = axes[1]
-    single_seed_delta_b1a = -1.6  # −1.6% at seed 42 (exploratory)
+    # Both bars are within-confirmatory: single seed 7 vs five-seed mean
+    single_seed_delta_b1a = (
+        bl["B1a"]["per_seed"]["7"] - bl["B0"]["per_seed"]["7"]
+    ) * 100  # +1.14 pp
     multi_mean_b1a = (bl["B1a"]["best_miou_fg_mean"] - bl["B0"]["best_miou_fg_mean"]) * 100
-    multi_std_b1a = np.sqrt(bl["B1a"]["best_miou_fg_std"] ** 2 + bl["B0"]["best_miou_fg_std"] ** 2) * 100
+    multi_std_b1a = bl["pairwise_tests"]["B1a"]["std_delta"] * 100  # paired std of differences
 
     ax.bar(0, single_seed_delta_b1a, color="#C0504D", width=0.6)
     ax.bar(1, multi_mean_b1a, yerr=multi_std_b1a, color="#4472C4", width=0.6,
            capsize=6, error_kw={"linewidth": 2})
     ax.axhline(0, color="black", linewidth=0.5)
     ax.set_xticks([0, 1])
-    ax.set_xticklabels(["Exploratory\n(single run)", "Confirmatory\n(5 seeds)"], fontsize=10)
-    ax.set_ylabel(r"$\Delta$ mIoU$_{fg}$ (%)", fontsize=11)
+    ax.set_xticklabels(["Single seed\n(seed 7)", "Five-seed mean\n(same protocol)"], fontsize=10)
+    ax.set_ylabel(r"$\Delta$ mIoU$_{fg}$ (pp)", fontsize=11)
     ax.set_title("(b) B1a clDice vs B0", fontsize=12, fontweight="bold")
-    ax.text(1, 0.8, "p=0.947 (ns)\nTOST: equiv",
+    ax.text(1, multi_mean_b1a + multi_std_b1a + 0.15, "p=0.947 (ns)\nTOST: equiv",
             ha="center", fontsize=10, color="green")
-    ax.set_ylim(-2.0, 1.5)
+    ax.set_ylim(-0.5, 1.8)
     ax.grid(axis="y", alpha=0.3)
 
     fig.tight_layout()
