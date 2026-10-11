@@ -1,7 +1,14 @@
 {
   "baseline": "B0",
-  "best_miou_fg": 0.6689816153953233,
-  "final_val_loss": 0.36182421040639545,
+  "best_miou_fg": 0.6653741358385804,
+  "perclass": {
+    "iou_crack": 0.5120333011790902,
+    "iou_spalling": 0.18707751438468487,
+    "miou_fg": 0.34955540778188754,
+    "bf1_crack": 0.5814386380113409,
+    "bf1_spalling": 0.5559850096939115
+  },
+  "final_val_loss": 0.3758014164734305,
   "epochs": 100,
   "total_params": 27085251,
   "trainable_params": 27085251,

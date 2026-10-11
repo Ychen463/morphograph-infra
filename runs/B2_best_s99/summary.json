@@ -1,12 +1,19 @@
 {
   "baseline": "B2",
   "description": "B0 + skeleton DT regression (mse, unmasked)",
-  "best_miou_fg": 0.6912248638106382,
+  "best_miou_fg": 0.6900998270711474,
+  "perclass": {
+    "iou_crack": 0.5462808914890295,
+    "iou_spalling": 0.16231872115731638,
+    "miou_fg": 0.35429980632317293,
+    "bf1_crack": 0.6723951616556657,
+    "bf1_spalling": 0.44576505744907824
+  },
   "b0_miou_fg": 0.673,
   "b1a_miou_fg": 0.657,
-  "delta_vs_b0": 0.018224863810638148,
-  "delta_vs_b1a": 0.03422486381063816,
-  "final_val_loss": 0.3223551289554228,
+  "delta_vs_b0": 0.017099827071147322,
+  "delta_vs_b1a": 0.033099827071147336,
+  "final_val_loss": 0.3449714790310776,
   "epochs": 100,
   "total_params": 27232900,
   "skeleton_config": {

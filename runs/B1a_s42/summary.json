@@ -1,10 +1,17 @@
 {
   "baseline": "B1a",
   "description": "B0 + clDice (topology loss on crack class)",
-  "best_miou_fg": 0.6664892206675831,
+  "best_miou_fg": 0.6599766376173245,
+  "perclass": {
+    "iou_crack": 0.5225062187757735,
+    "iou_spalling": 0.16173374501016455,
+    "miou_fg": 0.34211998189296905,
+    "bf1_crack": 0.5895229292923622,
+    "bf1_spalling": 0.5102317486996708
+  },
   "b0_miou_fg": 0.673,
-  "delta_miou_fg": -0.006510779332416949,
-  "final_val_loss": 0.3527184024191739,
+  "delta_miou_fg": -0.01302336238267554,
+  "final_val_loss": 0.3602544249672639,
   "epochs": 100,
   "total_params": 27085251,
   "cldice_config": {

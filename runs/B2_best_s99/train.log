@@ -1,52 +1,129 @@
 Device: cuda
-GPU: NVIDIA GeForce RTX 3090
+GPU: NVIDIA GeForce RTX 4090
 Data: 1500 total, 1275 train, 225 val
 /usr/local/lib/python3.12/dist-packages/albumentations/core/validation.py:114: UserWarning: ShiftScaleRotate is a special case of Affine transform. Please use Affine transform instead.
   original_init(self, **validated_kwargs)
 Loading SegFormer-B2 pretrained encoder...
-Traceback (most recent call last):
-  File "/usr/local/lib/python3.12/dist-packages/huggingface_hub/file_download.py", line 399, in http_get
-    import hf_transfer  # type: ignore[no-redef]
-    ^^^^^^^^^^^^^^^^^^
-ModuleNotFoundError: No module named 'hf_transfer'
+Parameters: 27,232,900 total
+  encoder: 24,196,288
+  fpn: 2,888,192
+  seg_head: 771
+  skeleton_head: 147,649
 
-During handling of the above exception, another exception occurred:
+Skeleton DT loss: weight=10.0, type=mse, unmask=True, start=0, ramp=0
 
-Traceback (most recent call last):
-  File "/workspace/morphograph-infra/scripts/train_b2.py", line 407, in <module>
-    main()
-  File "/workspace/morphograph-infra/scripts/train_b2.py", line 186, in main
-    model = MorphoAuxNet(
-            ^^^^^^^^^^^^^
-  File "/workspace/morphograph-infra/src/morphograph/models/morphograph_net.py", line 288, in __init__
-    self.encoder = self._build_encoder(backbone)
-                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/workspace/morphograph-infra/src/morphograph/models/morphograph_net.py", line 320, in _build_encoder
-    model = SegformerModel.from_pretrained(
-            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.12/dist-packages/transformers/modeling_utils.py", line 277, in _wrapper
-    return func(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.12/dist-packages/transformers/modeling_utils.py", line 4734, in from_pretrained
-    resolved_config_file = cached_file(
-                           ^^^^^^^^^^^^
-  File "/usr/local/lib/python3.12/dist-packages/transformers/utils/hub.py", line 322, in cached_file
-    file = cached_files(path_or_repo_id=path_or_repo_id, filenames=[filename], **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.12/dist-packages/transformers/utils/hub.py", line 567, in cached_files
-    raise e
-  File "/usr/local/lib/python3.12/dist-packages/transformers/utils/hub.py", line 479, in cached_files
-    hf_hub_download(
-  File "/usr/local/lib/python3.12/dist-packages/huggingface_hub/utils/_validators.py", line 114, in _inner_fn
-    return fn(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.12/dist-packages/huggingface_hub/file_download.py", line 1014, in hf_hub_download
-    return _hf_hub_download_to_cache_dir(
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.12/dist-packages/huggingface_hub/file_download.py", line 1175, in _hf_hub_download_to_cache_dir
-    _download_to_tmp_and_move(
-  File "/usr/local/lib/python3.12/dist-packages/huggingface_hub/file_download.py", line 1742, in _download_to_tmp_and_move
-    http_get(
-  File "/usr/local/lib/python3.12/dist-packages/huggingface_hub/file_download.py", line 401, in http_get
-    raise ValueError(
-ValueError: Fast download using 'hf_transfer' is enabled (HF_HUB_ENABLE_HF_TRANSFER=1) but 'hf_transfer' package is not available in your environment. Try `pip install hf_transfer`.
+Training B2 for 100 epochs...
+  Batches/epoch: 318
+
+/usr/local/lib/python3.12/dist-packages/torch/optim/lr_scheduler.py:192: UserWarning: Detected call of `lr_scheduler.step()` before `optimizer.step()`. In PyTorch 1.1.0 and later, you should call them in the opposite order: `optimizer.step()` before `lr_scheduler.step()`.  Failure to do this will result in PyTorch skipping the first value of the learning rate schedule. See more details at https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate
+  warnings.warn(
+Epoch   1/100 | seg=0.6318 skel=0.0343 total=0.9749 | val=0.3968 mIoU_fg=0.5472 | c0=0.962 c1=0.444 c2=0.650 | 161s *
+Epoch   2/100 | seg=0.4342 skel=0.0057 total=0.4912 | val=0.3532 mIoU_fg=0.5481 | c0=0.953 c1=0.425 c2=0.672 | 156s *
+Epoch   3/100 | seg=0.3926 skel=0.0044 total=0.4367 | val=0.3352 mIoU_fg=0.5975 | c0=0.960 c1=0.460 c2=0.735 | 156s *
+Epoch   4/100 | seg=0.3723 skel=0.0040 total=0.4124 | val=0.3423 mIoU_fg=0.6092 | c0=0.965 c1=0.488 c2=0.730 | 156s *
+Epoch   5/100 | seg=0.3624 skel=0.0038 total=0.4005 | val=0.3321 mIoU_fg=0.6198 | c0=0.965 c1=0.479 c2=0.760 | 156s *
+Epoch   6/100 | seg=0.3568 skel=0.0038 total=0.3948 | val=0.3305 mIoU_fg=0.5958 | c0=0.962 c1=0.483 c2=0.709 | 157s
+Epoch   7/100 | seg=0.3503 skel=0.0036 total=0.3868 | val=0.3375 mIoU_fg=0.5992 | c0=0.963 c1=0.478 c2=0.720 | 157s
+Epoch   8/100 | seg=0.3303 skel=0.0036 total=0.3659 | val=0.3150 mIoU_fg=0.6385 | c0=0.967 c1=0.499 c2=0.778 | 156s *
+Epoch   9/100 | seg=0.3221 skel=0.0035 total=0.3568 | val=0.3126 mIoU_fg=0.6360 | c0=0.966 c1=0.501 c2=0.771 | 156s
+Epoch  10/100 | seg=0.3327 skel=0.0035 total=0.3675 | val=0.3087 mIoU_fg=0.6406 | c0=0.968 c1=0.516 c2=0.765 | 156s *
+Epoch  11/100 | seg=0.3193 skel=0.0034 total=0.3536 | val=0.2967 mIoU_fg=0.6457 | c0=0.969 c1=0.525 c2=0.766 | 155s *
+Epoch  12/100 | seg=0.3179 skel=0.0034 total=0.3517 | val=0.3192 mIoU_fg=0.6495 | c0=0.971 c1=0.527 c2=0.772 | 157s *
+Epoch  13/100 | seg=0.2973 skel=0.0033 total=0.3307 | val=0.3526 mIoU_fg=0.5982 | c0=0.963 c1=0.488 c2=0.709 | 157s
+Epoch  14/100 | seg=0.3008 skel=0.0033 total=0.3340 | val=0.3078 mIoU_fg=0.6270 | c0=0.967 c1=0.513 c2=0.741 | 157s
+Epoch  15/100 | seg=0.2906 skel=0.0032 total=0.3229 | val=0.3175 mIoU_fg=0.6443 | c0=0.969 c1=0.525 c2=0.764 | 156s
+Epoch  16/100 | seg=0.2918 skel=0.0032 total=0.3242 | val=0.3323 mIoU_fg=0.5933 | c0=0.959 c1=0.469 c2=0.717 | 156s
+Epoch  17/100 | seg=0.2992 skel=0.0032 total=0.3313 | val=0.2977 mIoU_fg=0.6584 | c0=0.968 c1=0.513 c2=0.804 | 156s *
+Epoch  18/100 | seg=0.2893 skel=0.0032 total=0.3214 | val=0.3037 mIoU_fg=0.6587 | c0=0.967 c1=0.513 c2=0.805 | 156s *
+Epoch  19/100 | seg=0.2840 skel=0.0032 total=0.3159 | val=0.3081 mIoU_fg=0.6513 | c0=0.962 c1=0.479 c2=0.823 | 157s
+Epoch  20/100 | seg=0.2887 skel=0.0032 total=0.3202 | val=0.2917 mIoU_fg=0.6761 | c0=0.971 c1=0.538 c2=0.814 | 156s *
+Epoch  21/100 | seg=0.2810 skel=0.0031 total=0.3123 | val=0.2885 mIoU_fg=0.6587 | c0=0.963 c1=0.485 c2=0.832 | 156s
+Epoch  22/100 | seg=0.2837 skel=0.0031 total=0.3147 | val=0.2925 mIoU_fg=0.6598 | c0=0.968 c1=0.522 c2=0.797 | 157s
+Epoch  23/100 | seg=0.2772 skel=0.0031 total=0.3078 | val=0.3069 mIoU_fg=0.6658 | c0=0.968 c1=0.520 c2=0.811 | 156s
+Epoch  24/100 | seg=0.2769 skel=0.0031 total=0.3077 | val=0.3042 mIoU_fg=0.6586 | c0=0.969 c1=0.523 c2=0.795 | 156s
+Epoch  25/100 | seg=0.2742 skel=0.0030 total=0.3044 | val=0.3073 mIoU_fg=0.6374 | c0=0.966 c1=0.509 c2=0.766 | 156s
+Epoch  26/100 | seg=0.2664 skel=0.0030 total=0.2967 | val=0.2989 mIoU_fg=0.6634 | c0=0.966 c1=0.500 c2=0.827 | 156s
+Epoch  27/100 | seg=0.2700 skel=0.0030 total=0.3002 | val=0.2961 mIoU_fg=0.6512 | c0=0.961 c1=0.478 c2=0.825 | 156s
+Epoch  28/100 | seg=0.2680 skel=0.0030 total=0.2978 | val=0.3410 mIoU_fg=0.6551 | c0=0.972 c1=0.541 c2=0.769 | 156s
+Epoch  29/100 | seg=0.2604 skel=0.0030 total=0.2900 | val=0.3291 mIoU_fg=0.6372 | c0=0.968 c1=0.518 c2=0.756 | 157s
+Epoch  30/100 | seg=0.2648 skel=0.0029 total=0.2942 | val=0.2998 mIoU_fg=0.6661 | c0=0.967 c1=0.512 c2=0.821 | 157s
+Epoch  31/100 | seg=0.2665 skel=0.0030 total=0.2962 | val=0.3017 mIoU_fg=0.6763 | c0=0.968 c1=0.516 c2=0.836 | 155s *
+Epoch  32/100 | seg=0.2679 skel=0.0030 total=0.2975 | val=0.3023 mIoU_fg=0.6603 | c0=0.967 c1=0.514 c2=0.807 | 155s
+Epoch  33/100 | seg=0.2508 skel=0.0029 total=0.2795 | val=0.2986 mIoU_fg=0.6838 | c0=0.971 c1=0.536 c2=0.831 | 155s *
+Epoch  34/100 | seg=0.2591 skel=0.0029 total=0.2879 | val=0.2926 mIoU_fg=0.6846 | c0=0.971 c1=0.537 c2=0.832 | 156s *
+Epoch  35/100 | seg=0.2550 skel=0.0029 total=0.2837 | val=0.3137 mIoU_fg=0.6743 | c0=0.972 c1=0.544 c2=0.805 | 156s
+Epoch  36/100 | seg=0.2549 skel=0.0029 total=0.2836 | val=0.3306 mIoU_fg=0.6710 | c0=0.972 c1=0.546 c2=0.796 | 157s
+Epoch  37/100 | seg=0.2566 skel=0.0029 total=0.2852 | val=0.3168 mIoU_fg=0.6475 | c0=0.967 c1=0.516 c2=0.779 | 156s
+Epoch  38/100 | seg=0.2585 skel=0.0029 total=0.2870 | val=0.3263 mIoU_fg=0.6597 | c0=0.972 c1=0.547 c2=0.772 | 158s
+Epoch  39/100 | seg=0.2491 skel=0.0028 total=0.2771 | val=0.2940 mIoU_fg=0.6894 | c0=0.973 c1=0.559 c2=0.820 | 157s *
+Epoch  40/100 | seg=0.2460 skel=0.0028 total=0.2743 | val=0.3064 mIoU_fg=0.6678 | c0=0.969 c1=0.525 c2=0.811 | 156s
+Epoch  41/100 | seg=0.2589 skel=0.0028 total=0.2872 | val=0.2901 mIoU_fg=0.6818 | c0=0.971 c1=0.541 c2=0.823 | 157s
+Epoch  42/100 | seg=0.2502 skel=0.0028 total=0.2779 | val=0.3280 mIoU_fg=0.6718 | c0=0.971 c1=0.540 c2=0.804 | 156s
+Epoch  43/100 | seg=0.2388 skel=0.0027 total=0.2663 | val=0.3013 mIoU_fg=0.6736 | c0=0.972 c1=0.542 c2=0.806 | 156s
+Epoch  44/100 | seg=0.2403 skel=0.0027 total=0.2677 | val=0.3152 mIoU_fg=0.6889 | c0=0.974 c1=0.553 c2=0.825 | 155s
+Epoch  45/100 | seg=0.2444 skel=0.0027 total=0.2718 | val=0.3054 mIoU_fg=0.6901 | c0=0.973 c1=0.554 c2=0.826 | 156s *
+Epoch  46/100 | seg=0.2465 skel=0.0027 total=0.2737 | val=0.3078 mIoU_fg=0.6849 | c0=0.973 c1=0.545 c2=0.825 | 156s
+Epoch  47/100 | seg=0.2353 skel=0.0027 total=0.2623 | val=0.3066 mIoU_fg=0.6760 | c0=0.970 c1=0.531 c2=0.821 | 156s
+Epoch  48/100 | seg=0.2433 skel=0.0027 total=0.2704 | val=0.3164 mIoU_fg=0.6691 | c0=0.971 c1=0.543 c2=0.795 | 156s
+Epoch  49/100 | seg=0.2452 skel=0.0027 total=0.2721 | val=0.3059 mIoU_fg=0.6808 | c0=0.972 c1=0.550 c2=0.812 | 156s
+Epoch  50/100 | seg=0.2393 skel=0.0026 total=0.2658 | val=0.3083 mIoU_fg=0.6658 | c0=0.971 c1=0.543 c2=0.789 | 156s
+Epoch  51/100 | seg=0.2340 skel=0.0026 total=0.2604 | val=0.3129 mIoU_fg=0.6629 | c0=0.969 c1=0.528 c2=0.798 | 157s
+Epoch  52/100 | seg=0.2370 skel=0.0026 total=0.2635 | val=0.3099 mIoU_fg=0.6697 | c0=0.970 c1=0.529 c2=0.810 | 160s
+Epoch  53/100 | seg=0.2395 skel=0.0026 total=0.2657 | val=0.3051 mIoU_fg=0.6704 | c0=0.969 c1=0.524 c2=0.817 | 157s
+Epoch  54/100 | seg=0.2335 skel=0.0026 total=0.2598 | val=0.3188 mIoU_fg=0.6590 | c0=0.969 c1=0.527 c2=0.791 | 156s
+Epoch  55/100 | seg=0.2322 skel=0.0026 total=0.2582 | val=0.3163 mIoU_fg=0.6722 | c0=0.971 c1=0.537 c2=0.807 | 157s
+Epoch  56/100 | seg=0.2314 skel=0.0026 total=0.2572 | val=0.3400 mIoU_fg=0.6330 | c0=0.970 c1=0.537 c2=0.729 | 158s
+Epoch  57/100 | seg=0.2314 skel=0.0026 total=0.2572 | val=0.3601 mIoU_fg=0.6279 | c0=0.971 c1=0.545 c2=0.710 | 159s
+Epoch  58/100 | seg=0.2296 skel=0.0026 total=0.2554 | val=0.3338 mIoU_fg=0.6690 | c0=0.973 c1=0.551 c2=0.787 | 161s
+Epoch  59/100 | seg=0.2243 skel=0.0026 total=0.2500 | val=0.3679 mIoU_fg=0.6342 | c0=0.971 c1=0.546 c2=0.723 | 159s
+Epoch  60/100 | seg=0.2295 skel=0.0025 total=0.2545 | val=0.3497 mIoU_fg=0.6506 | c0=0.972 c1=0.547 c2=0.755 | 159s
+Epoch  61/100 | seg=0.2220 skel=0.0025 total=0.2473 | val=0.3543 mIoU_fg=0.6511 | c0=0.972 c1=0.550 c2=0.752 | 161s
+Epoch  62/100 | seg=0.2266 skel=0.0025 total=0.2520 | val=0.3300 mIoU_fg=0.6536 | c0=0.970 c1=0.537 c2=0.770 | 160s
+Epoch  63/100 | seg=0.2300 skel=0.0025 total=0.2552 | val=0.3574 mIoU_fg=0.6289 | c0=0.969 c1=0.531 c2=0.726 | 161s
+Epoch  64/100 | seg=0.2245 skel=0.0025 total=0.2498 | val=0.3189 mIoU_fg=0.6684 | c0=0.970 c1=0.532 c2=0.805 | 160s
+Epoch  65/100 | seg=0.2201 skel=0.0025 total=0.2452 | val=0.3573 mIoU_fg=0.6248 | c0=0.970 c1=0.534 c2=0.715 | 160s
+Epoch  66/100 | seg=0.2307 skel=0.0025 total=0.2555 | val=0.3436 mIoU_fg=0.6477 | c0=0.971 c1=0.546 c2=0.749 | 159s
+Epoch  67/100 | seg=0.2205 skel=0.0025 total=0.2453 | val=0.3402 mIoU_fg=0.6547 | c0=0.971 c1=0.539 c2=0.771 | 159s
+Epoch  68/100 | seg=0.2234 skel=0.0025 total=0.2482 | val=0.3531 mIoU_fg=0.6579 | c0=0.972 c1=0.549 c2=0.766 | 160s
+Epoch  69/100 | seg=0.2255 skel=0.0025 total=0.2501 | val=0.3662 mIoU_fg=0.6479 | c0=0.973 c1=0.554 c2=0.742 | 160s
+Epoch  70/100 | seg=0.2191 skel=0.0024 total=0.2433 | val=0.3522 mIoU_fg=0.6474 | c0=0.972 c1=0.547 c2=0.748 | 162s
+Epoch  71/100 | seg=0.2285 skel=0.0024 total=0.2528 | val=0.3656 mIoU_fg=0.6484 | c0=0.973 c1=0.554 c2=0.743 | 159s
+Epoch  72/100 | seg=0.2237 skel=0.0024 total=0.2481 | val=0.3482 mIoU_fg=0.6538 | c0=0.972 c1=0.546 c2=0.762 | 157s
+Epoch  73/100 | seg=0.2242 skel=0.0024 total=0.2484 | val=0.3442 mIoU_fg=0.6633 | c0=0.973 c1=0.546 c2=0.781 | 156s
+Epoch  74/100 | seg=0.2221 skel=0.0024 total=0.2463 | val=0.3340 mIoU_fg=0.6797 | c0=0.972 c1=0.543 c2=0.816 | 157s
+Epoch  75/100 | seg=0.2096 skel=0.0024 total=0.2333 | val=0.3314 mIoU_fg=0.6709 | c0=0.972 c1=0.547 c2=0.795 | 158s
+Epoch  76/100 | seg=0.2208 skel=0.0024 total=0.2447 | val=0.3348 mIoU_fg=0.6824 | c0=0.973 c1=0.548 c2=0.816 | 158s
+Epoch  77/100 | seg=0.2146 skel=0.0024 total=0.2387 | val=0.3572 mIoU_fg=0.6505 | c0=0.971 c1=0.545 c2=0.756 | 157s
+Epoch  78/100 | seg=0.2220 skel=0.0024 total=0.2461 | val=0.3339 mIoU_fg=0.6755 | c0=0.973 c1=0.550 c2=0.801 | 157s
+Epoch  79/100 | seg=0.2145 skel=0.0024 total=0.2385 | val=0.3387 mIoU_fg=0.6661 | c0=0.972 c1=0.547 c2=0.786 | 158s
+Epoch  80/100 | seg=0.2196 skel=0.0024 total=0.2433 | val=0.3546 mIoU_fg=0.6526 | c0=0.972 c1=0.550 c2=0.755 | 158s
+Epoch  81/100 | seg=0.2133 skel=0.0024 total=0.2370 | val=0.3430 mIoU_fg=0.6691 | c0=0.973 c1=0.551 c2=0.787 | 160s
+Epoch  82/100 | seg=0.2114 skel=0.0024 total=0.2350 | val=0.3468 mIoU_fg=0.6591 | c0=0.972 c1=0.543 c2=0.775 | 161s
+Epoch  83/100 | seg=0.2146 skel=0.0024 total=0.2382 | val=0.3445 mIoU_fg=0.6756 | c0=0.973 c1=0.550 c2=0.802 | 159s
+Epoch  84/100 | seg=0.2152 skel=0.0024 total=0.2390 | val=0.3403 mIoU_fg=0.6725 | c0=0.973 c1=0.550 c2=0.795 | 159s
+Epoch  85/100 | seg=0.2206 skel=0.0024 total=0.2443 | val=0.3447 mIoU_fg=0.6662 | c0=0.972 c1=0.548 c2=0.785 | 157s
+Epoch  86/100 | seg=0.2158 skel=0.0024 total=0.2394 | val=0.3469 mIoU_fg=0.6707 | c0=0.973 c1=0.549 c2=0.793 | 156s
+Epoch  87/100 | seg=0.2182 skel=0.0024 total=0.2417 | val=0.3523 mIoU_fg=0.6654 | c0=0.973 c1=0.550 c2=0.781 | 155s
+Epoch  88/100 | seg=0.2138 skel=0.0023 total=0.2372 | val=0.3430 mIoU_fg=0.6660 | c0=0.972 c1=0.544 c2=0.788 | 156s
+Epoch  89/100 | seg=0.2255 skel=0.0023 total=0.2489 | val=0.3426 mIoU_fg=0.6687 | c0=0.972 c1=0.544 c2=0.793 | 157s
+Epoch  90/100 | seg=0.2168 skel=0.0024 total=0.2405 | val=0.3471 mIoU_fg=0.6691 | c0=0.973 c1=0.548 c2=0.790 | 156s
+Epoch  91/100 | seg=0.2138 skel=0.0024 total=0.2375 | val=0.3470 mIoU_fg=0.6689 | c0=0.973 c1=0.548 c2=0.790 | 156s
+Epoch  92/100 | seg=0.2145 skel=0.0024 total=0.2380 | val=0.3462 mIoU_fg=0.6688 | c0=0.972 c1=0.547 c2=0.791 | 156s
+Epoch  93/100 | seg=0.2140 skel=0.0023 total=0.2371 | val=0.3466 mIoU_fg=0.6712 | c0=0.973 c1=0.551 c2=0.792 | 157s
+Epoch  94/100 | seg=0.2125 skel=0.0023 total=0.2360 | val=0.3459 mIoU_fg=0.6705 | c0=0.973 c1=0.548 c2=0.793 | 156s
+Epoch  95/100 | seg=0.2176 skel=0.0023 total=0.2411 | val=0.3459 mIoU_fg=0.6708 | c0=0.973 c1=0.548 c2=0.793 | 156s
+Epoch  96/100 | seg=0.2134 skel=0.0023 total=0.2367 | val=0.3451 mIoU_fg=0.6711 | c0=0.973 c1=0.549 c2=0.793 | 155s
+Epoch  97/100 | seg=0.2157 skel=0.0023 total=0.2391 | val=0.3454 mIoU_fg=0.6710 | c0=0.973 c1=0.549 c2=0.793 | 157s
+Epoch  98/100 | seg=0.2118 skel=0.0023 total=0.2351 | val=0.3453 mIoU_fg=0.6711 | c0=0.973 c1=0.549 c2=0.794 | 156s
+Epoch  99/100 | seg=0.2185 skel=0.0023 total=0.2419 | val=0.3450 mIoU_fg=0.6712 | c0=0.973 c1=0.549 c2=0.794 | 156s
+Epoch 100/100 | seg=0.2146 skel=0.0023 total=0.2380 | val=0.3450 mIoU_fg=0.6712 | c0=0.973 c1=0.549 c2=0.794 | 157s
+
+Curves saved to runs/B2_best_s99/training_curves.png
+
+Running final per-class eval from best.pt ...
+  iou_crack=0.5463  iou_spalling=0.1623  bf1_crack=0.6724
+
+B2 training complete. Best mIoU_fg = 0.6901
+Delta vs B0: +0.0171
+Delta vs B1a: +0.0331
+Results saved to runs/B2_best_s99/
