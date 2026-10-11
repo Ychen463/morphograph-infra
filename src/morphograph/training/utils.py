@@ -265,7 +265,12 @@ def eval_perclass_metrics(
     model.to(device)
     model.eval()
 
-    iou_accum: dict = {c: [] for c in range(NUM_CLASSES)}
+    # IoU: global confusion matrix (matches compute_miou used during training).
+    # BF1: per-image average (no global equivalent for boundary metrics).
+    IGNORE = 255
+    tp = {c: 0 for c in range(NUM_CLASSES)}
+    fp = {c: 0 for c in range(NUM_CLASSES)}
+    fn = {c: 0 for c in range(NUM_CLASSES)}
     bf1_accum: dict = {1: [], 2: []}
 
     with torch.no_grad():
@@ -279,19 +284,27 @@ def eval_perclass_metrics(
             preds = outputs["seg"].argmax(dim=1).cpu().numpy()
 
             for i in range(len(images)):
-                iou = compute_iou(preds[i], masks[i])
+                valid = masks[i] != IGNORE
+                for c in range(NUM_CLASSES):
+                    p_c = (preds[i] == c) & valid
+                    t_c = (masks[i] == c) & valid
+                    tp[c] += int((p_c & t_c).sum())
+                    fp[c] += int((p_c & ~t_c).sum())
+                    fn[c] += int((~p_c & t_c).sum())
                 bf1 = compute_boundary_f1(preds[i], masks[i], tolerance_px=2)
-                for c, v in iou.items():
-                    iou_accum[c].append(v)
                 for c, v in bf1.items():
                     bf1_accum[c].append(v)
+
+    def _global_iou(c: int) -> float:
+        denom = tp[c] + fp[c] + fn[c]
+        return tp[c] / denom if denom > 0 else 0.0
 
     def _mean(lst):
         return float(np.mean(lst)) if lst else None
 
-    iou_crack    = _mean(iou_accum[1])
-    iou_spalling = _mean(iou_accum[2])
-    miou_fg      = float(np.mean([v for v in [iou_crack, iou_spalling] if v is not None]))
+    iou_crack    = _global_iou(1)
+    iou_spalling = _global_iou(2)
+    miou_fg      = (iou_crack + iou_spalling) / 2.0
 
     return {
         "iou_crack":    iou_crack,
