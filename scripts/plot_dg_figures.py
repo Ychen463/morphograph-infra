@@ -1,6 +1,7 @@
-"""Regenerate DG figures with 5-seed data.
+"""Regenerate paper figures with 5-seed confirmatory data.
 
 Produces:
+  paper/final/figures/fig_multiseed_baseline_comparison.png
   paper/final/figures/fig_dg_multiseed_domain_gap.png
   paper/final/figures/fig_single_vs_multiseed_overturned.png
 """
@@ -123,6 +124,83 @@ def plot_single_vs_multiseed():
     print(f"Saved {OUT / 'fig_single_vs_multiseed_overturned.png'}")
 
 
+def plot_baseline_comparison():
+    """Regenerate fig_multiseed_baseline_comparison.png from current JSON."""
+    with open(RUNS / "baseline_multiseed_summary.json") as f:
+        bl = json.load(f)
+
+    methods = ["B0", "B1a", "B2_best", "B3", "B5"]
+    labels = ["B0\n(mask-only)", "B1a\n(+clDice)", "B2_best\n(+skelDT)", "B3\n(+keypoints)", "B5\n(+full joint)"]
+    colors = ["#4472C4", "#C0504D", "#70AD47", "#ED7D31", "#7030A0"]
+    seeds = [0, 7, 42, 99, 123]
+
+    means = [bl[m]["best_miou_fg_mean"] for m in methods]
+    stds  = [bl[m]["best_miou_fg_std"]  for m in methods]
+
+    # Per-seed values for scatter dots
+    per_seed = [[bl[m]["per_seed"][str(s)] for s in seeds] for m in methods]
+
+    # p-values and TOST from pairwise_tests (vs B0); B0 has no test
+    pvals  = [None] + [bl["pairwise_tests"][m]["p_value"] for m in methods[1:]]
+    tost_p = [None] + [bl["pairwise_tests"][m]["tost_p"]  for m in methods[1:]]
+    sig    = [None] + [bl["pairwise_tests"][m]["significant"] for m in methods[1:]]
+
+    x = np.arange(len(methods))
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    bars = ax.bar(x, means, color=colors, alpha=0.85, zorder=2)
+    ax.errorbar(x, means, yerr=stds, fmt="none", color="black",
+                capsize=5, linewidth=1.8, zorder=3)
+
+    # Per-seed dots
+    for i, seeds_vals in enumerate(per_seed):
+        jitter = np.zeros(len(seeds_vals))
+        ax.scatter([x[i]] * len(seeds_vals), seeds_vals,
+                   color="black", s=25, zorder=4, alpha=0.8)
+
+    # p-value / TOST annotations
+    for i, m in enumerate(methods[1:], 1):
+        p = pvals[i]
+        tp = tost_p[i]
+        is_sig = sig[i]
+        y_top = means[i] + stds[i] + 0.003
+
+        if is_sig:
+            label = f"p={p:.3f}*\nInferior"
+            color = "red"
+        else:
+            label = f"p={p:.3f} (ns)"
+            color = "dimgrey"
+        ax.text(x[i], y_top, label, ha="center", va="bottom",
+                fontsize=9, color=color, zorder=5)
+
+        # TOST label for equivalent methods
+        if tp is not None and tp < 0.05:
+            ax.text(x[i], y_top + 0.013, f"TOST: equiv\n(p={tp:.3f})",
+                    ha="center", va="bottom", fontsize=8.5,
+                    color="green", fontweight="bold", zorder=5)
+
+    # B0 reference line
+    b0_mean = means[0]
+    ax.axhline(b0_mean, color="#4472C4", linestyle="--", alpha=0.4, linewidth=1.5, zorder=1)
+    ax.text(len(methods) - 0.45, b0_mean + 0.001, f"B0 mean={b0_mean:.3f}",
+            ha="right", va="bottom", fontsize=9, color="#4472C4", alpha=0.8)
+
+    ax.set_ylabel(r"mIoU$_{fg}$", fontsize=14)
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, fontsize=11)
+    ax.set_title("Multi-Seed Comparison of Baseline Methods (5 seeds)", fontsize=13)
+    ax.set_ylim(0.64, 0.73)
+    ax.grid(axis="y", alpha=0.3, zorder=0)
+    fig.tight_layout()
+
+    out = OUT / "fig_multiseed_baseline_comparison.png"
+    fig.savefig(out, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Saved {out}")
+
+
 if __name__ == "__main__":
+    plot_baseline_comparison()
     plot_dg_domain_gap(load_dg_summary())
     plot_single_vs_multiseed()
