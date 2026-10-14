@@ -3,9 +3,9 @@
   "description": "B0 + clDice (topology loss on crack class)",
   "best_miou_fg": 0.6897750849771149,
   "perclass": {
-    "iou_crack": 0.5293332666902011,
-    "iou_spalling": 0.19115325903496233,
-    "miou_fg": 0.3602432628625817,
+    "iou_crack": 0.554993594699335,
+    "iou_spalling": 0.8245565752548948,
+    "miou_fg": 0.6897750849771149,
     "bf1_crack": 0.6619431619917254,
     "bf1_spalling": 0.5106471946615124
   },

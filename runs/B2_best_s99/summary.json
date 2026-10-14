@@ -3,9 +3,9 @@
   "description": "B0 + skeleton DT regression (mse, unmasked)",
   "best_miou_fg": 0.6900998270711474,
   "perclass": {
-    "iou_crack": 0.5462808914890295,
-    "iou_spalling": 0.16231872115731638,
-    "miou_fg": 0.35429980632317293,
+    "iou_crack": 0.5538509632391515,
+    "iou_spalling": 0.8263486909031432,
+    "miou_fg": 0.6900998270711474,
     "bf1_crack": 0.6723951616556657,
     "bf1_spalling": 0.44576505744907824
   },

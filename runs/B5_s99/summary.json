@@ -1,11 +1,18 @@
 {
   "baseline": "B5",
-  "best_miou_fg": 0.687779883811718,
+  "best_miou_fg": 0.6921903346162299,
+  "perclass": {
+    "iou_crack": 0.5369975678492839,
+    "iou_spalling": 0.847383101383176,
+    "miou_fg": 0.6921903346162299,
+    "bf1_crack": 0.6427276556859317,
+    "bf1_spalling": 0.47345416305418
+  },
   "b0_miou_fg": 0.673,
   "b2_best_miou_fg": 0.683,
-  "delta_vs_b0": 0.014779883811717909,
-  "delta_vs_b2": 0.0047798838117179,
-  "final_val_loss": 0.31131862875139504,
+  "delta_vs_b0": 0.019190334616229876,
+  "delta_vs_b2": 0.009190334616229867,
+  "final_val_loss": 0.2981229461075967,
   "epochs": 100,
   "total_params": 27675847,
   "config": {
